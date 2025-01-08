@@ -1,10 +1,19 @@
-use std::{
-    env, fs,
-    io,
-};
+use std::{env, fs, io};
 
-fn run(raw_code: &str) {
-    println!("Your code is\n\n{}", raw_code)
+use utils::error;
+
+mod utils;
+
+fn main() {
+    let mut args: Vec<String> = env::args().collect();
+
+    if args.len() == 1 {
+        run_prompt();
+    } else if args.len() == 2 {
+        run_file(args.remove(1));
+    } else {
+        println!("Usage: rslox <file_path>")
+    }
 }
 
 fn run_file(path: String) {
@@ -20,7 +29,7 @@ fn run_prompt() {
         print!("> ");
 
         // Force the buffer to be send to the console
-        io::Write::flush(&mut io::stdout()).expect("Error: buffer");
+        io::Write::flush(&mut io::stdout()).expect("Failed to clean buffer");
 
         io::stdin()
             .read_line(&mut line)
@@ -34,14 +43,6 @@ fn run_prompt() {
     }
 }
 
-fn main() {
-    let mut args: Vec<String> = env::args().collect();
-
-    if args.len() == 1 {
-        run_prompt();
-    } else if args.len() == 2 {
-        run_file(args.remove(1));
-    } else {
-        println!("Usage: rslox <file_path>")
-    }
+fn run(raw_code: &str) {
+    println!("| {}", raw_code);
 }
