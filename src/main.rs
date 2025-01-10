@@ -1,7 +1,8 @@
-use std::{env, fs, io};
+use std::{env, fs, io, process};
 
-use utils::error;
+use utils::Result;
 
+mod token;
 mod utils;
 
 fn main() {
@@ -18,7 +19,10 @@ fn main() {
 
 fn run_file(path: String) {
     let raw_code = fs::read_to_string(path).expect("Failed to read the file");
-    run(&raw_code);
+
+    if let Err(..) = run(&raw_code) {
+        process::exit(67)
+    }
 }
 
 fn run_prompt() {
@@ -39,10 +43,12 @@ fn run_prompt() {
             break;
         }
 
-        run(&line);
+        if let Err(..) = run(&line) {
+            eprintln!("| have an error")
+        }
     }
 }
 
-fn run(raw_code: &str) {
-    println!("| {}", raw_code);
+fn run(raw_code: &str) -> Result {
+    Ok(())
 }
