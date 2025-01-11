@@ -1,9 +1,10 @@
+#![allow(warnings)]
 use std::{env, fs, io, process};
 
-use utils::Result;
+use errors::{Error, SystemError};
 
+mod errors;
 mod token;
-mod utils;
 
 fn main() {
     let mut args: Vec<String> = env::args().collect();
@@ -18,9 +19,16 @@ fn main() {
 }
 
 fn run_file(path: String) {
-    let raw_code = fs::read_to_string(path).expect("Failed to read the file");
+    let raw_code = match fs::read_to_string(&path) {
+        Ok(val) => val,
+        Err(..) => {
+            Error::from(SystemError::FileNotFound(path)).report();
+            process::exit(1)
+        }
+    };
 
-    if let Err(..) = run(&raw_code) {
+    if let Err(e) = run(&raw_code) {
+        e.report();
         process::exit(67)
     }
 }
@@ -33,22 +41,23 @@ fn run_prompt() {
         print!("> ");
 
         // Force the buffer to be send to the console
-        io::Write::flush(&mut io::stdout()).expect("Failed to clean buffer");
+        if let Err(e) = io::Write::flush(&mut io::stdout()) {
+            Error::from(SystemError::Io(e)).report();
+        }
 
-        io::stdin()
-            .read_line(&mut line)
-            .expect("Failed to read line");
+        if let Err(e) = io::stdin().read_line(&mut line) {
+            Error::from(SystemError::Io(e)).report();
+        }
 
         if line.is_empty() {
+            print!("\n");
             break;
         }
 
-        if let Err(..) = run(&line) {
-            eprintln!("| have an error")
-        }
+        run(&line).map_err(|e| e.report()).ok();
     }
 }
 
-fn run(raw_code: &str) -> Result {
+fn run(raw_code: &str) -> Result<(), Error> {
     Ok(())
 }
