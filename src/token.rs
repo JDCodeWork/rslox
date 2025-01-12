@@ -1,12 +1,30 @@
 use std::any;
 
+#[derive(Debug)]
 pub struct Token {
-  token_type: TokenType,
-  lexeme: String,
-  literal: Box<dyn any::Any>,
-  line: isize
+    token_type: TokenType,
+    lexeme: String,
+    literal: Option<Box<dyn any::Any>>,
+    line: isize,
 }
 
+impl Token {
+    pub fn new(
+        token_type: TokenType,
+        lexeme: String,
+        literal: Option<Box<dyn any::Any>>,
+        line: isize,
+    ) -> Self {
+        Token {
+            token_type,
+            lexeme,
+            literal,
+            line,
+        }
+    }
+}
+
+#[derive(Debug)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen,

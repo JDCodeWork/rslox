@@ -2,7 +2,9 @@
 use std::{env, fs, io, process};
 
 use errors::{Error, SystemError};
+use scanner::Scanner;
 
+mod scanner;
 mod errors;
 mod token;
 
@@ -59,5 +61,12 @@ fn run_prompt() {
 }
 
 fn run(raw_code: &str) -> Result<(), Error> {
+    let mut scanner = Scanner::new(raw_code.to_string());
+    let tokens = scanner.scan_tokens();
+
+    for token in tokens {
+        println!("{:?}", token)
+    }
+
     Ok(())
 }

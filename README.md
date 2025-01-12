@@ -1,6 +1,22 @@
 # rslox - A simple scripting language
+This repository is an example of one of the ways in which the `lox` programming language could be implemented by following the steps described in the book [***"crafting interpreters"***](https://craftinginterpreters.com/) by *Robert Nystrom*
 
----
+## How to Use
+
+### Interactive Mode
+To run the interpreter in interactive mode, use the following command:
+```bash
+cargo run -q
+```
+This will start the interpreter where you can type and execute code directly.
+
+### Run From a File
+To execute code from a file, use:
+```bash
+cargo run -q -- <file_path>
+```
+Replace `<file_path>` with the path to your `.lox` file.
+
 ## Learning log
 
 ### Dynamic types [10-01-25]

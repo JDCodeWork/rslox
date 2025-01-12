@@ -7,10 +7,13 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com).
 ---
 ## [Unreleased]
 
+### Changed 
+- Scanner support for literal strings and literal numbers 
+
+## [0.2.0] - 2025-01-11
+
 ### Added
-- Structure Scanner
-- Structure token
-- Enum of token types
+- Basic scanner and token system
 - Basic error system
 
 ##  [0.1.0] - 2025-01-06
