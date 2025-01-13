@@ -4,8 +4,8 @@ use std::{env, fs, io, process};
 use errors::{Error, SystemError};
 use scanner::Scanner;
 
-mod scanner;
 mod errors;
+mod scanner;
 mod token;
 
 fn main() {
@@ -21,10 +21,19 @@ fn main() {
 }
 
 fn run_file(path: String) {
-    let raw_code = match fs::read_to_string(&path) {
+    let path_formatted = if path.ends_with(".lox") {
+        path
+    } else if path.contains('.') {
+        Error::from(SystemError::InvalidFileExtension).report();
+        process::exit(1);
+    } else {
+        format!("{path}.lox")
+    };
+
+    let raw_code = match fs::read_to_string(&path_formatted) {
         Ok(val) => val,
         Err(..) => {
-            Error::from(SystemError::FileNotFound(path)).report();
+            Error::from(SystemError::FileNotFound(path_formatted)).report();
             process::exit(1)
         }
     };
