@@ -8,10 +8,13 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
-### Changed 
+### Added 
 
 - Scanner support: literal strings, literal numbers
-- Exclusive support for files with the `.lox` extension
+
+### Changed
+
+- Reading files only supports extensions ending in `.lox` 
 
 ## [0.2.0] - 2025-01-11
 

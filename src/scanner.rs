@@ -104,6 +104,7 @@ impl Scanner {
             }
             ' ' | '\r' | '\t' => {}
             '\n' => self.line += 1,
+            '"' => self.string(),
             _ => {
                 Error::from(LoxError::UnexpectedChar)
                     .with_line(self.line as isize)
@@ -166,5 +167,25 @@ impl Scanner {
             Some(c) => c,
             None => '\0',
         }
+    }
+
+    fn string(&mut self) {
+        while self.pick() != '"' && !self.is_at_end() {
+            if self.pick() == '\n' {
+                self.line += 1;
+            }
+
+            self.advance();
+        }
+
+        if self.is_at_end() {
+            Error::from(LoxError::UnterminatedString).with_line(self.line as isize);
+            return;
+        }
+
+        self.advance();
+
+        let literal = &self.source[(self.start + 1)..(self.current - 1)];
+        self.add_token(TokenType::String, Some(Box::new(literal.to_string())));
     }
 }

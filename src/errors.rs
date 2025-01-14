@@ -17,6 +17,8 @@ pub enum ErrorType {
 pub enum LoxError {
     #[error("Unexpected character.")]
     UnexpectedChar,
+    #[error("Unterminated string.")]
+    UnterminatedString
 }
 
 #[derive(ThisError, Debug)]
