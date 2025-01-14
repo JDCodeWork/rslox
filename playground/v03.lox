@@ -1,0 +1,5 @@
+// this is a comment
+(( )){} // grouping stuff
+!*+-/=<> <= == // operators
+"strings literals"
+123 9.81 3.141516 // literals numbers

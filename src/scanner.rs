@@ -1,4 +1,4 @@
-use std::any::Any;
+use std::{any::Any, process};
 
 use crate::{
     errors::{Error, LoxError},
@@ -95,7 +95,7 @@ impl Scanner {
             }
             '/' => {
                 if self.match_char('/') {
-                    while self.pick() != '\n' && !self.is_at_end() {
+                    while self.peek() != '\n' && !self.is_at_end() {
                         self.advance();
                     }
                 } else {
@@ -105,6 +105,7 @@ impl Scanner {
             ' ' | '\r' | '\t' => {}
             '\n' => self.line += 1,
             '"' => self.string(),
+            ch if ch.is_ascii_digit() => self.number(),
             _ => {
                 Error::from(LoxError::UnexpectedChar)
                     .with_line(self.line as isize)
@@ -160,9 +161,9 @@ impl Scanner {
         }
 
         found
-    }
+}
 
-    fn pick(&self) -> char {
+    fn peek(&self) -> char {
         match self.source.chars().nth(self.current) {
             Some(c) => c,
             None => '\0',
@@ -170,8 +171,8 @@ impl Scanner {
     }
 
     fn string(&mut self) {
-        while self.pick() != '"' && !self.is_at_end() {
-            if self.pick() == '\n' {
+        while self.peek() != '"' && !self.is_at_end() {
+            if self.peek() == '\n' {
                 self.line += 1;
             }
 
@@ -183,9 +184,45 @@ impl Scanner {
             return;
         }
 
+        // The closing "
         self.advance();
 
+        // Trim the surrounding quotes
         let literal = &self.source[(self.start + 1)..(self.current - 1)];
         self.add_token(TokenType::String, Some(Box::new(literal.to_string())));
+    }
+
+    fn number(&mut self) {
+        while self.peek().is_ascii_digit() {
+            self.advance();
+        }
+
+        // Look for a fractional part
+        if self.peek() == '.' && self.pick_next().is_ascii_digit() {
+            // Consume the "."
+            self.advance();
+
+            while self.peek().is_ascii_digit() {
+                self.advance();
+            }
+        }
+
+        let literal: f64 = match &self.source[self.start..self.current].parse() {
+            Ok(n) => *n,
+            Err(..) => {
+                Error::from(LoxError::UnknownError)
+                    .with_line(self.line as isize)
+                    .report();
+                process::exit(1)
+            }
+        };
+        self.add_token(TokenType::Number, Some(Box::new(literal)));
+    }
+
+    fn pick_next(&self) -> char {
+        match self.source.chars().nth(self.current + 1) {
+            Some(c) => c,
+            None => '\0',
+        }
     }
 }

@@ -8,9 +8,15 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+### Added
+
+- Scanner support: Reserved words and identifiers
+
+## [0.3.0] - 2025-01-13
+
 ### Added 
 
-- Scanner support: literal strings, literal numbers
+- Scanner support: literal strings and literal numbers
 
 ### Changed
 

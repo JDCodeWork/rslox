@@ -1,4 +1,4 @@
-# rslox - A simple scripting language
+# rslox - Implementation of the lox language proposed by the book “Crafting Interpreters”.
 This repository is an example of one of the ways in which the `lox` programming language could be implemented by following the steps described in the book [***"crafting interpreters"***](https://craftinginterpreters.com/) by *Robert Nystrom*
 
 ## How to Use
@@ -19,7 +19,7 @@ Replace `<file_path>` with the path to your `.lox` file.
 
 ## Learning log
 
-### Dynamic types [10-01-25]
+### Dynamic types [2025-01-10]
 Rust as an innovate language compared to many others by providing a safe and efficient way to manage memory through concepts like **ownership**, **borrowing**, **lifetimes**, and the combined management of the **stack** and the **heap** 
 
 For example, in Rust, it's possible to handle dynamic data flexible and securely using structures like the following:
@@ -34,7 +34,7 @@ In this case:
 - **`dyn`** indicates that the specific type of the value is not know at the compile time.
 - **`any::Any`** allows the `literal` field to store values of any time that implements the `Any` trait.
 
-### Output buffering [06-01-25]
+### Output buffering [2025-01-06]
 In many programming languages, data is temporarily stored in a location called a `buffer` before begin send to the console. This buffer holds the data until it's ready to be displayed
 
 But this data is only displayed when one of these conditions is met
