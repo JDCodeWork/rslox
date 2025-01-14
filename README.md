@@ -1,4 +1,4 @@
-# rslox - Implementation of the lox language proposed by the book “Crafting Interpreters”.
+# rslox
 This repository is an example of one of the ways in which the `lox` programming language could be implemented by following the steps described in the book [***"crafting interpreters"***](https://craftinginterpreters.com/) by *Robert Nystrom*
 
 ## How to Use
