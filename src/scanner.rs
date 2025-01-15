@@ -121,6 +121,30 @@ impl Scanner {
                     while self.peek() != '\n' && !self.is_at_end() {
                         self.advance();
                     }
+                } else if self.match_char('*') {
+                    loop {
+                        if self.peek() == '*' && self.peek_next() == '/' {
+                            break;
+                        }
+
+                        if self.peek() == '\n' {
+                            self.line += 1;
+                        }
+
+                        self.advance();
+                    }
+
+                    if self.is_at_end() {
+                        Error::from(LoxError::UnterminatedString)
+                            .with_line(self.line as isize)
+                            .report();
+                        return;
+                    }
+
+                    // The closing */
+                    for _ in 0..2 {
+                        self.advance();
+                    }
                 } else {
                     self.add_token(TokenType::Slash, None);
                 }
@@ -204,7 +228,9 @@ impl Scanner {
         }
 
         if self.is_at_end() {
-            Error::from(LoxError::UnterminatedString).with_line(self.line as isize);
+            Error::from(LoxError::UnterminatedString)
+                .with_line(self.line as isize)
+                .report();
             return;
         }
 

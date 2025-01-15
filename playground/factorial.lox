@@ -1,0 +1,15 @@
+/* 
+  A simple program to calculate the factorial of a number in Lox.
+*/
+
+fun factorial(n) {
+  // Base case: factorial of 0 or 1 is 1.
+  if (n <= 1) return 1;
+
+  // Recursive case: n * factorial(n - 1).
+  return n * factorial(n - 1);
+}
+
+// Prompt the user for a number and calculate its factorial.
+var number = 5; // You can replace this with any number you'd like.
+print "The factorial of " + number + " is " + factorial(number);

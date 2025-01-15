@@ -1,4 +1,3 @@
-#![allow(warnings)]
 use std::{env, fs, io, process};
 
 use errors::{Error, SystemError};
@@ -22,6 +21,7 @@ fn main() {
 
 fn run_file(path: String) {
     let path_formatted = if path.ends_with(".lox") {
+        println!("Note: It's not necessary to include .lox extension");
         path
     } else if path.contains('.') {
         Error::from(SystemError::InvalidFileExtension).report();

@@ -31,7 +31,7 @@ pub enum SystemError {
     #[error("File not found in path: '{0}'")]
     FileNotFound(String),
     #[error("Invalid file extension, expected '.lox' extension")]
-    InvalidFileExtension
+    InvalidFileExtension,
 }
 
 impl From<LoxError> for Error {
@@ -59,7 +59,7 @@ impl Error {
         self
     }
 
-    pub fn report(self) -> ErrorType{
+    pub fn report(self) -> ErrorType {
         match &self.error_type {
             ErrorType::Lox(err) => {
                 if let Some(line) = self.line {
@@ -67,7 +67,7 @@ impl Error {
                 } else {
                     println!("Lox error: {}", err.to_string())
                 }
-            },
+            }
             ErrorType::System(err) => {
                 println!("System error: {}", err.to_string())
             }

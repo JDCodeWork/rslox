@@ -8,9 +8,18 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+### Fixed
+
+- Special characters in comments
+
+## [0.4.0] - 2025-01-15
+
 ### Added
 
-- Scanner support: Reserved words and identifiers
+- Scanner support: 
+  * Reserved words 
+  * identifiers 
+  * block comments
 
 ## [0.3.0] - 2025-01-13
 
