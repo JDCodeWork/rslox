@@ -1,4 +1,4 @@
-use std::any;
+use std::{any, fmt};
 
 #[derive(Debug)]
 pub struct Token {
@@ -24,7 +24,29 @@ impl Token {
     }
 }
 
-#[derive(Debug)]
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let literal = if let Some(val) = &self.literal {
+            if let Some(lit) = val.downcast_ref::<String>() {
+                lit.clone()
+            } else if let Some(lit) = val.downcast_ref::<f64>() {
+                lit.to_string()
+            } else {
+                String::from("Unknown type")
+            }
+        } else {
+            String::new()
+        };
+
+        write!(
+            f,
+            "Token( type: {:?}, literal: ({}), lexeme: {} ) at line {}",
+            self.token_type, literal, self.lexeme, self.line
+        )
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen,

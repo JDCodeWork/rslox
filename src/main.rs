@@ -74,8 +74,9 @@ fn run(raw_code: &str) -> Result<(), Error> {
     let tokens = scanner.scan_tokens();
 
     for token in tokens {
-        println!("{:#?}\n", token)
+        println!("-> {}", token)
     }
 
+    println!();
     Ok(())
 }

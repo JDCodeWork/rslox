@@ -1,4 +1,4 @@
-use std::{any::Any, process};
+use std::{any::Any, collections::HashMap, process};
 
 use crate::{
     errors::{Error, LoxError},
@@ -13,6 +13,29 @@ pub struct Scanner {
     start: usize,
     current: usize,
     line: usize,
+}
+
+fn keywords() -> HashMap<&'static str, TokenType> {
+    let mut keywords = HashMap::new();
+
+    keywords.insert("and", TokenType::And);
+    keywords.insert("class", TokenType::Class);
+    keywords.insert("else", TokenType::Else);
+    keywords.insert("false", TokenType::False);
+    keywords.insert("for", TokenType::For);
+    keywords.insert("fun", TokenType::Fun);
+    keywords.insert("if", TokenType::If);
+    keywords.insert("nil", TokenType::Nil);
+    keywords.insert("or", TokenType::Or);
+    keywords.insert("print", TokenType::Print);
+    keywords.insert("return", TokenType::Return);
+    keywords.insert("super", TokenType::Super);
+    keywords.insert("this", TokenType::This);
+    keywords.insert("true", TokenType::True);
+    keywords.insert("var", TokenType::Var);
+    keywords.insert("while", TokenType::While);
+
+    keywords
 }
 
 impl Scanner {
@@ -106,6 +129,7 @@ impl Scanner {
             '\n' => self.line += 1,
             '"' => self.string(),
             ch if ch.is_ascii_digit() => self.number(),
+            ch if ch.is_ascii_alphabetic() || ch == '_' => self.identifier(),
             _ => {
                 Error::from(LoxError::UnexpectedChar)
                     .with_line(self.line as isize)
@@ -161,7 +185,7 @@ impl Scanner {
         }
 
         found
-}
+    }
 
     fn peek(&self) -> char {
         match self.source.chars().nth(self.current) {
@@ -198,7 +222,7 @@ impl Scanner {
         }
 
         // Look for a fractional part
-        if self.peek() == '.' && self.pick_next().is_ascii_digit() {
+        if self.peek() == '.' && self.peek_next().is_ascii_digit() {
             // Consume the "."
             self.advance();
 
@@ -219,10 +243,26 @@ impl Scanner {
         self.add_token(TokenType::Number, Some(Box::new(literal)));
     }
 
-    fn pick_next(&self) -> char {
+    fn peek_next(&self) -> char {
         match self.source.chars().nth(self.current + 1) {
             Some(c) => c,
             None => '\0',
         }
+    }
+
+    fn identifier(&mut self) {
+        while self.peek().is_alphanumeric() || self.peek() == '_' {
+            self.advance();
+        }
+
+        let text = &self.source[self.start..self.current];
+
+        let token_type: TokenType = if let Some(token) = keywords().get(text) {
+            token.clone()
+        } else {
+            TokenType::Identifier
+        };
+
+        self.add_token(token_type, None);
     }
 }
