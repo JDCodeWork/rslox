@@ -185,13 +185,14 @@ impl Scanner {
     }
 
     fn advance(&mut self) -> char {
-        match self.source.chars().nth(self.current) {
-            Some(c) => {
-                self.current += 1;
-                c
-            }
-            None => ' ',
-        }
+        let current_char = match self.source[self.current..].chars().next() {
+            Some(c) => c,
+            None => '\0',
+        };
+
+        self.current += current_char.len_utf8();
+
+        current_char
     }
 
     fn match_char(&mut self, expected: char) -> bool {
@@ -199,7 +200,7 @@ impl Scanner {
             return false;
         }
 
-        let found = match self.source.chars().nth(self.current) {
+        let found = match self.source[self.current..].chars().nth(0) {
             Some(c) => c == expected,
             None => false,
         };
@@ -212,7 +213,7 @@ impl Scanner {
     }
 
     fn peek(&self) -> char {
-        match self.source.chars().nth(self.current) {
+        match self.source[self.current..].chars().next() {
             Some(c) => c,
             None => '\0',
         }
@@ -270,7 +271,7 @@ impl Scanner {
     }
 
     fn peek_next(&self) -> char {
-        match self.source.chars().nth(self.current + 1) {
+        match self.source[self.current..].chars().nth(1) {
             Some(c) => c,
             None => '\0',
         }

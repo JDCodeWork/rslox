@@ -8,9 +8,11 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [0.4.1] - 2025-01-16
+
 ### Fixed
 
-- Special characters in comments
+- Special characters
 
 ## [0.4.0] - 2025-01-15
 
