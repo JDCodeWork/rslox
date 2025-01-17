@@ -8,6 +8,10 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+### Added
+
+- Tool for generate AST
+
 ## [0.4.1] - 2025-01-16
 
 ### Fixed

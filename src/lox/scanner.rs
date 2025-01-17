@@ -1,12 +1,11 @@
 use std::{any::Any, collections::HashMap, process};
 
-use crate::{
-    errors::{Error, LoxError},
-    token::{Token, TokenType},
-};
+use crate::errors::{Error, LoxError};
+
+use super::token::{Token, TokenType};
 
 #[derive(Debug)]
-pub struct Scanner {
+pub(super) struct Scanner {
     source: String,
     tokens: Vec<Token>,
 
