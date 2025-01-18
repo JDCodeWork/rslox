@@ -1,30 +1,27 @@
-use std::{fs, io, process};
+use std::{fs, io};
 
-use crate::{errors::{Error, SystemError}, lox::scanner::Scanner};
-
+use crate::{
+    errors::{Error, SystemError},
+    lox::scanner::Scanner,
+};
 
 pub fn run_file(path: String) {
     let path_formatted = if path.ends_with(".lox") {
         println!("Note: It's not necessary to include .lox extension");
         path
     } else if path.contains('.') {
-        Error::from(SystemError::InvalidFileExtension).report();
-        process::exit(1);
+        Error::from(SystemError::InvalidFileExtension).report_and_exit(1);
     } else {
         format!("{path}.lox")
     };
 
     let raw_code = match fs::read_to_string(&path_formatted) {
         Ok(val) => val,
-        Err(..) => {
-            Error::from(SystemError::FileNotFound(path_formatted)).report();
-            process::exit(1)
-        }
+        Err(..) => Error::from(SystemError::FileNotFound(path_formatted)).report_and_exit(1),
     };
 
     if let Err(e) = run(&raw_code) {
-        e.report();
-        process::exit(67)
+        e.report_and_exit(67);
     }
 }
 

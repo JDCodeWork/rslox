@@ -10,6 +10,7 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com).
 
 ### Added
 
+- Enhance CLI: Added parameters, commands, and color support
 - Tool for generate AST
 
 ## [0.4.1] - 2025-01-16

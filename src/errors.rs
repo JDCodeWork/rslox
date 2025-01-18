@@ -1,3 +1,5 @@
+use std::process;
+
 use thiserror::Error as ThisError;
 
 pub struct Error {
@@ -59,7 +61,7 @@ impl Error {
         self
     }
 
-    pub fn report(self) -> ErrorType {
+    pub fn report(self) -> Self {
         match &self.error_type {
             ErrorType::Lox(err) => {
                 if let Some(line) = self.line {
@@ -73,6 +75,11 @@ impl Error {
             }
         }
 
-        self.error_type
+        self
+    }
+
+    pub fn report_and_exit(self, code: i32) -> ! {
+        self.report();
+        process::exit(code);
     }
 }
