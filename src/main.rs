@@ -12,7 +12,7 @@ fn main() {
     args.remove(0);
 
     if args.len() < 1 {
-        show_help();
+        return show_help();
     }
 
     match args[0].as_str() {

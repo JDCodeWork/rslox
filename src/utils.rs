@@ -2,7 +2,7 @@ use css::DarkGray;
 use owo_colors::{colors::*, OwoColorize};
 
 pub fn show_help() {
-    println!("\n{}", " USAGE ".fg::<Black>().bg::<Green>().bold());
+    println!("\n{}", " USAGE ".fg::<Black>().bg::<Green>());
     println!(
         "\n{} {} {} {}",
         "$".fg::<DarkGray>(),
