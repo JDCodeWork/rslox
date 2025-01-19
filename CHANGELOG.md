@@ -23,20 +23,20 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com).
 
 ### Added
 
-- Scanner support: 
-  * Reserved words 
-  * identifiers 
-  * block comments
+- Scanner support:
+  - Reserved words
+  - identifiers
+  - block comments
 
 ## [0.3.0] - 2025-01-13
 
-### Added 
+### Added
 
 - Scanner support: literal strings and literal numbers
 
 ### Changed
 
-- Reading files only supports extensions ending in `.lox` 
+- Reading files only supports extensions ending in `.lox`
 
 ## [0.2.0] - 2025-01-11
 
@@ -45,7 +45,7 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com).
 - Basic scanner and token system
 - Basic error system
 
-##  [0.1.0] - 2025-01-06
+## [0.1.0] - 2025-01-06
 
 ### Added
 

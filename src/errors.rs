@@ -1,10 +1,13 @@
-use std::process;
-
 use thiserror::Error as ThisError;
+
+use crate::cli::Alert;
 
 pub struct Error {
     error_type: ErrorType,
-    line: Option<isize>,
+}
+
+trait ErrorMsg {
+    fn get_msg(&self) -> String;
 }
 
 #[derive(ThisError, Debug)]
@@ -18,12 +21,27 @@ pub enum ErrorType {
 #[derive(ThisError, Debug)]
 pub enum LoxError {
     #[error("Unexpected character.")]
-    UnexpectedChar,
+    UnexpectedChar(usize),
     #[error("Unterminated string.")]
-    UnterminatedString,
-    // It should not exist
-    #[error("Unknown Error")]
-    UnknownError,
+    UnterminatedString(usize),
+    #[error("Unknown Type.")]
+    UnknownType(usize),
+}
+
+impl LoxError {
+    fn val(&self) -> usize {
+        match self {
+            LoxError::UnexpectedChar(val)
+            | LoxError::UnknownType(val)
+            | LoxError::UnterminatedString(val) => *val,
+        }
+    }
+}
+
+impl ErrorMsg for LoxError {
+    fn get_msg(&self) -> String {
+        format!("LOX | [line {}] {}", self.val(), self.to_string())
+    }
 }
 
 #[derive(ThisError, Debug)]
@@ -36,11 +54,16 @@ pub enum SystemError {
     InvalidFileExtension,
 }
 
+impl ErrorMsg for SystemError {
+    fn get_msg(&self) -> String {
+        format!("SYS | {}", self.to_string())
+    }
+}
+
 impl From<LoxError> for Error {
     fn from(error: LoxError) -> Self {
         Error {
             error_type: ErrorType::Lox(error),
-            line: None,
         }
     }
 }
@@ -49,37 +72,30 @@ impl From<SystemError> for Error {
     fn from(error: SystemError) -> Self {
         Error {
             error_type: ErrorType::System(error),
-            line: None,
         }
     }
 }
 
 impl Error {
-    pub fn with_line(mut self, line: isize) -> Self {
-        self.line = Some(line);
-
-        self
-    }
-
-    pub fn report(self) -> Self {
-        match &self.error_type {
+    pub fn report(self) {
+        match self.error_type {
             ErrorType::Lox(err) => {
-                if let Some(line) = self.line {
-                    println!("[ line {line} ] Error: {}", err.to_string())
-                } else {
-                    println!("Lox error: {}", err.to_string())
-                }
+                Alert::error(err.get_msg()).show();
             }
             ErrorType::System(err) => {
-                println!("System error: {}", err.to_string())
+                Alert::error(err.get_msg()).show();
             }
-        }
-
-        self
+        };
     }
 
     pub fn report_and_exit(self, code: i32) -> ! {
-        self.report();
-        process::exit(code);
+        match self.error_type {
+            ErrorType::Lox(err) => {
+                Alert::error(err.get_msg()).show_and_exit(code);
+            }
+            ErrorType::System(err) => {
+                Alert::error(err.get_msg()).show_and_exit(code);
+            }
+        };
     }
 }

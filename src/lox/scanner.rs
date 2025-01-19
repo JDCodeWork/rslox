@@ -1,4 +1,4 @@
-use std::{any::Any, collections::HashMap, process};
+use std::{any::Any, collections::HashMap};
 
 use crate::errors::{Error, LoxError};
 
@@ -134,9 +134,7 @@ impl Scanner {
                     }
 
                     if self.is_at_end() {
-                        Error::from(LoxError::UnterminatedString)
-                            .with_line(self.line as isize)
-                            .report();
+                        Error::from(LoxError::UnterminatedString(self.line)).report();
                         return;
                     }
 
@@ -154,9 +152,7 @@ impl Scanner {
             ch if ch.is_ascii_digit() => self.number(),
             ch if ch.is_ascii_alphabetic() || ch == '_' => self.identifier(),
             _ => {
-                Error::from(LoxError::UnexpectedChar)
-                    .with_line(self.line as isize)
-                    .report();
+                Error::from(LoxError::UnexpectedChar(self.line)).report();
             }
         };
     }
@@ -228,9 +224,7 @@ impl Scanner {
         }
 
         if self.is_at_end() {
-            Error::from(LoxError::UnterminatedString)
-                .with_line(self.line as isize)
-                .report();
+            Error::from(LoxError::UnterminatedString(self.line)).report();
             return;
         }
 
@@ -260,10 +254,7 @@ impl Scanner {
         let literal: f64 = match &self.source[self.start..self.current].parse() {
             Ok(n) => *n,
             Err(..) => {
-                Error::from(LoxError::UnknownError)
-                    .with_line(self.line as isize)
-                    .report();
-                process::exit(1)
+                Error::from(LoxError::UnknownType(self.line)).report_and_exit(1);
             }
         };
         self.add_token(TokenType::Number, Some(Box::new(literal)));

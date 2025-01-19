@@ -1,13 +1,14 @@
 use std::{fs, io};
 
 use crate::{
+    cli::Alert,
     errors::{Error, SystemError},
     lox::scanner::Scanner,
 };
 
 pub fn run_file(path: String) {
     let path_formatted = if path.ends_with(".lox") {
-        println!("Note: It's not necessary to include .lox extension");
+        Alert::warning("CLI | It's not necessary to include .lox extension".to_string()).show();
         path
     } else if path.contains('.') {
         Error::from(SystemError::InvalidFileExtension).report_and_exit(1);
@@ -55,9 +56,8 @@ fn run(raw_code: &str) -> Result<(), Error> {
     let tokens = scanner.scan_tokens();
 
     for token in tokens {
-        println!("-> {}", token)
+        Alert::info(token.to_string()).show();
     }
 
-    println!();
     Ok(())
 }
