@@ -50,6 +50,8 @@ pub enum SystemError {
     Io(#[from] std::io::Error),
     #[error("File not found in path: '{0}'")]
     FileNotFound(String),
+    #[error("Filed to create file in path: '{0}'")]
+    FiledToCreateFile(String),
     #[error("Invalid file extension, expected '.lox' extension")]
     InvalidFileExtension,
 }

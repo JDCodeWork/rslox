@@ -97,19 +97,28 @@ pub fn show_help() {
 
     println!("\n{}\n", " COMMANDS ".fg::<Black>().bg::<Blue>());
     show_command("run", "run lox code");
-    show_command("gen", "use some tool to debug");
+    show_command("tool", "use one of the debugging tool");
 
     println!("\n{}\n", " OPTIONS ".fg::<Black>().bg::<Yellow>());
     print!("{} {} ", "$".fg::<DarkGray>(), "rslox".fg::<Green>());
-    println!("{}\t{}", "--help".yellow(), "Show help info");
+    println!("{}\t\t\t\t{}\n", "--help".yellow(), "Show help info");
 
     print!("{} {} ", "$".fg::<DarkGray>(), "rslox".fg::<Green>());
     println!(
-        "{} {} {}\t{}",
+        "{} {} {}\t\t\t{}",
         "run".fg::<Blue>().italic(),
         "-p".yellow(),
         "<PATH>".fg::<DarkGray>().italic(),
         "Path of the file to run"
+    );
+
+    print!("{} {} ", "$".fg::<DarkGray>(), "rslox".fg::<Green>());
+    println!(
+        "{} {} {}\t{}",
+        "tool".fg::<Blue>().italic(),
+        "gen-ast".yellow(),
+        "<OUTPUT_DIR>".fg::<DarkGray>().italic(),
+        "Generates definition file for the ast"
     )
 }
 
