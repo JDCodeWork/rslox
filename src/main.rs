@@ -2,7 +2,7 @@ use std::env;
 
 use cli::{show_help, Alert};
 use lox::{run_file, run_prompt};
-use tools::GenerateAst;
+use tools::AstGenerator;
 
 mod cli;
 mod errors;
@@ -73,7 +73,7 @@ fn handle_gen_ast_tool(args: Vec<String>) {
     .map(|t| t.to_string())
     .collect();
 
-    GenerateAst::define_ast(path, base_name, ast_types);
+    AstGenerator::new(base_name, ast_types).gen(path);
     Alert::success(String::from("CLI | AST successfully created")).show();
 }
 

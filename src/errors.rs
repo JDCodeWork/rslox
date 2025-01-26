@@ -16,6 +16,8 @@ pub enum ErrorType {
     Lox(#[from] LoxError),
     #[error(transparent)]
     System(#[from] SystemError),
+    #[error(transparent)]
+    CLI(#[from] CLIError),
 }
 
 #[derive(ThisError, Debug)]
@@ -62,6 +64,18 @@ impl ErrorMsg for SystemError {
     }
 }
 
+#[derive(ThisError, Debug)]
+pub enum CLIError {
+    #[error("Syntax invalid in AST tool")]
+    ASTSyntaxInvalid
+}
+
+impl ErrorMsg for CLIError {
+    fn get_msg(&self) -> String {
+        format!("CLI | {}", self.to_string())
+    }
+}
+
 impl From<LoxError> for Error {
     fn from(error: LoxError) -> Self {
         Error {
@@ -78,6 +92,13 @@ impl From<SystemError> for Error {
     }
 }
 
+impl From<CLIError> for Error {
+    fn from(error: CLIError) -> Self {
+        Error {
+            error_type: ErrorType::CLI(error),
+        }
+    }
+}
 impl Error {
     pub fn report(self) {
         match self.error_type {
@@ -85,6 +106,9 @@ impl Error {
                 Alert::error(err.get_msg()).show();
             }
             ErrorType::System(err) => {
+                Alert::error(err.get_msg()).show();
+            }
+            ErrorType::CLI(err) => {
                 Alert::error(err.get_msg()).show();
             }
         };
@@ -96,6 +120,9 @@ impl Error {
                 Alert::error(err.get_msg()).show_and_exit(code);
             }
             ErrorType::System(err) => {
+                Alert::error(err.get_msg()).show_and_exit(code);
+            }
+            ErrorType::CLI(err) => {
                 Alert::error(err.get_msg()).show_and_exit(code);
             }
         };
