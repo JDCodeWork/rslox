@@ -24,6 +24,12 @@ impl Token {
     }
 }
 
+impl Token {
+    pub fn get_type(&self) -> &TokenType {
+        &self.token_type
+    }
+}
+
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let literal = if let Some(val) = &self.literal {
@@ -46,7 +52,7 @@ impl fmt::Display for Token {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen,
