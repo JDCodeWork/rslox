@@ -1,4 +1,4 @@
-use std::{any::Any, collections::HashMap};
+use std::{any::Any, collections::HashMap, rc::Rc};
 
 use crate::errors::{Error, LoxError};
 
@@ -157,7 +157,7 @@ impl Scanner {
         };
     }
 
-    fn add_token(&mut self, token_type: TokenType, literal: Option<Box<dyn Any>>) {
+    fn add_token(&mut self, token_type: TokenType, literal: Option<Rc<dyn Any>>) {
         let Self {
             current,
             start,
@@ -233,7 +233,7 @@ impl Scanner {
 
         // Trim the surrounding quotes
         let literal = &self.source[(self.start + 1)..(self.current - 1)];
-        self.add_token(TokenType::String, Some(Box::new(literal.to_string())));
+        self.add_token(TokenType::String, Some(Rc::new(literal.to_string())));
     }
 
     fn number(&mut self) {
@@ -257,7 +257,7 @@ impl Scanner {
                 Error::from(LoxError::UnknownType(self.line)).report_and_exit(1);
             }
         };
-        self.add_token(TokenType::Number, Some(Box::new(literal)));
+        self.add_token(TokenType::Number, Some(Rc::new(literal)));
     }
 
     fn peek_next(&self) -> char {

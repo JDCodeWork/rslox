@@ -1,10 +1,10 @@
-use std::{any, fmt};
+use std::{any, fmt, rc::Rc};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Token {
     token_type: TokenType,
     lexeme: String,
-    literal: Option<Box<dyn any::Any>>,
+    literal: Option<Rc<dyn any::Any>>,
     line: isize,
 }
 
@@ -12,7 +12,7 @@ impl Token {
     pub fn new(
         token_type: TokenType,
         lexeme: String,
-        literal: Option<Box<dyn any::Any>>,
+        literal: Option<Rc<dyn any::Any>>,
         line: isize,
     ) -> Self {
         Token {
@@ -27,6 +27,23 @@ impl Token {
 impl Token {
     pub fn get_type(&self) -> &TokenType {
         &self.token_type
+    }
+
+    pub fn get_literal(&self) -> String {
+        match &self.literal {
+            None => String::new(),
+            Some(literal) => {
+                if let Some(string) = literal.downcast_ref::<String>() {
+                    string.clone()
+                } else if let Some(int) = literal.downcast_ref::<i32>() {
+                    int.to_string()
+                } else if let Some(float) = literal.downcast_ref::<f64>() {
+                    float.to_string()
+                } else {
+                    String::new()
+                }
+            }
+        }
     }
 }
 
