@@ -45,6 +45,10 @@ impl Token {
             }
         }
     }
+
+    pub fn get_lexeme(&self) -> String {
+        self.lexeme.clone()
+    }
 }
 
 impl fmt::Display for Token {

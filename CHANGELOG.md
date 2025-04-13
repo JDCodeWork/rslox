@@ -14,6 +14,7 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com).
 
 - Enhance CLI: Added parameters, commands, and color support
 - Tool for generate AST
+- Tool for view Ast
 
 ## [0.4.1] - 2025-01-16
 

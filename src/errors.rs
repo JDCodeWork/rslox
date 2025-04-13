@@ -26,6 +26,8 @@ pub enum LoxError {
     UnexpectedChar(usize),
     #[error("Unterminated string.")]
     UnterminatedString(usize),
+    #[error("{1}")]
+    CustomError(usize, String),
     #[error("Unknown Type.")]
     UnknownType(usize),
 }
@@ -36,6 +38,7 @@ impl LoxError {
             LoxError::UnexpectedChar(val)
             | LoxError::UnknownType(val)
             | LoxError::UnterminatedString(val) => *val,
+            | LoxError::CustomError(val, _) => *val
         }
     }
 }

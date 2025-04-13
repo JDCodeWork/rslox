@@ -1,6 +1,31 @@
 use std::{fs::File, io::Write};
 
-use crate::errors::{CLIError, Error, SystemError};
+use crate::{
+    errors::{CLIError, Error, SystemError},
+    lox::expr::Expr,
+};
+
+pub struct AstPrinter;
+
+impl AstPrinter {
+    pub fn print(expr: Expr) -> String {
+        expr.print()
+    }
+
+    pub fn parenthesize(name: &str, exprs: Vec<Box<Expr>>) -> String {
+        let mut builder = String::new();
+
+        builder += format!("({name}").as_str();
+
+        for expr in exprs {
+            builder += " ";
+            builder += expr.print().as_str()
+        }
+        builder += ")";
+
+        builder
+    }
+}
 
 pub struct AstGenerator {
     generated_code: String,

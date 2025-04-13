@@ -1,9 +1,16 @@
-use std::{fs, io};
+use std::{fs, io, process, ptr::null};
 
 use crate::{
     cli::Alert,
     errors::{Error, SystemError},
     lox::scanner::Scanner,
+    tools::AstPrinter,
+};
+
+use super::{
+    expr::{self, Binary, Expr, Grouping, Literal, Unary},
+    parser::Parser,
+    token::Token,
 };
 
 pub fn run_file(path: String) {
@@ -55,9 +62,19 @@ fn run(raw_code: &str) -> Result<(), Error> {
     let mut scanner = Scanner::new(raw_code.to_string());
     let tokens = scanner.scan_tokens();
 
-    for token in tokens {
+    let mut parser = Parser::new(tokens.clone());
+
+    /* for token in tokens {
         Alert::info(token.to_string()).show();
-    }
+    } */
+
+    let expr = match parser.parse() {
+        Ok(expr) => expr,
+        Err(lox_error) => Error::from(lox_error).report_and_exit(1),
+    };
+
+    print!("\n");
+    Alert::info(format!("AST -> {}", AstPrinter::print(expr))).show();
 
     Ok(())
 }

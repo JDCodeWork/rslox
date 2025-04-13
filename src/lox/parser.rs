@@ -1,4 +1,4 @@
-use crate::errors::{Error, ErrorType, LoxError};
+use crate::errors::LoxError;
 
 use super::{
     expr::{Binary, Expr, Grouping, Literal, Unary},
@@ -20,97 +20,107 @@ impl Parser {
 }
 
 impl Parser {
-    #[allow(unused)]
-    fn expression(&mut self) -> Expr {
+    pub fn parse(&mut self) -> Result<Expr, LoxError> {
+        self.expression()
+    }
+
+    fn expression(&mut self) -> Result<Expr, LoxError> {
         self.equality()
     }
 
-    fn equality(&mut self) -> Expr {
-        let mut expression = self.comparison();
+    fn equality(&mut self) -> Result<Expr, LoxError> {
+        let mut expression = self.comparison()?;
 
         while self.match_token(&[BangEqual, EqualEqual]) {
             let operator = self.previous().clone();
-            let right = self.comparison();
+            let right = self.comparison()?;
 
             expression = Expr::Binary(Binary::new(expression, operator, right));
         }
 
-        expression
+        Ok(expression)
     }
 
-    fn comparison(&mut self) -> Expr {
-        let mut expression = self.term();
+    fn comparison(&mut self) -> Result<Expr, LoxError> {
+        let mut expression = self.term()?;
 
         while self.match_token(&[Greater, GreaterEqual, Less, LessEqual]) {
             let operator = self.previous().clone();
-            let right = self.term();
+            let right = self.term()?;
 
             expression = Expr::Binary(Binary::new(expression, operator, right))
         }
 
-        expression
+        Ok(expression)
     }
 
-    fn term(&mut self) -> Expr {
-        let mut expression = self.factor();
+    fn term(&mut self) -> Result<Expr, LoxError> {
+        let mut expression = self.factor()?;
 
         while self.match_token(&[Minus, Plus]) {
             let operator = self.previous().clone();
-            let right = self.factor();
+            let right = self.factor()?;
 
             expression = Expr::Binary(Binary::new(expression, operator, right))
         }
 
-        expression
+        Ok(expression)
     }
 
-    fn factor(&mut self) -> Expr {
-        let mut expression = self.unary();
+    fn factor(&mut self) -> Result<Expr, LoxError> {
+        let mut expression = self.unary()?;
 
-        while self.match_token(&[Minus, Plus]) {
+        while self.match_token(&[Star, Slash]) {
             let operator = self.previous().clone();
-            let right = self.unary();
+            let right = self.unary()?;
 
             expression = Expr::Binary(Binary::new(expression, operator, right))
         }
 
-        expression
+        Ok(expression)
     }
 
-    fn unary(&mut self) -> Expr {
+    fn unary(&mut self) -> Result<Expr, LoxError> {
         if self.match_token(&[Bang, Minus]) {
             let operator = self.previous().clone();
-            let right = self.unary();
+            let right = self.unary()?;
 
-            Expr::Unary(Unary::new(operator, right))
+            Ok(Expr::Unary(Unary::new(operator, right)))
         } else {
             self.primary()
         }
     }
 
-    fn primary(&mut self) -> Expr {
+    fn primary(&mut self) -> Result<Expr, LoxError> {
         let expression = match self.peek().get_type() {
-            False => Expr::Literal(Literal::new("false".to_string())),
-            True => Expr::Literal(Literal::new("true".to_string())),
-            Nil => Expr::Literal(Literal::new("null".to_string())),
+            False => {
+                self.advance();
+                Expr::Literal(Literal::new("false".to_string()))
+            }
+            True => {
+                self.advance();
+                Expr::Literal(Literal::new("true".to_string()))
+            }
+            Nil => {
+                self.advance();
+                Expr::Literal(Literal::new("null".to_string()))
+            }
             Number | String => {
-                Expr::Literal(Literal::new(self.previous().get_literal().to_string()))
+                let lit = self.peek().get_literal().to_string();
+                self.advance();
+                Expr::Literal(Literal::new(lit))
             }
             LeftParen => {
-                let expr = self.expression();
+                self.advance();
+                let expr = self.expression()?;
 
-                self.consume(RightParen, "Expect ')' after expression.");
+                self.consume(RightParen, "Expect ')' after expression.")?;
 
                 Expr::Grouping(Grouping::new(expr))
             }
-            _ => {
-                Error::from(LoxError::UnknownType(self.current)).report_and_exit(1);
-            }
+            _ => return Err(LoxError::UnknownType(self.current)),
         };
-
-        self.advance();
-
-        expression
+        Ok(expression)
     }
 
     fn match_token(&mut self, types: &[TokenType]) -> bool {
@@ -148,9 +158,13 @@ impl Parser {
     }
 
     fn previous(&self) -> &Token {
-        match self.tokens.get(self.current - 1) {
-            None => self.peek(),
-            Some(token) => token,
+        if self.current == 0 {
+            self.peek()
+        } else {
+            match self.tokens.get(self.current - 1) {
+                None => self.peek(),
+                Some(token) => token,
+            }
         }
     }
 
@@ -158,7 +172,12 @@ impl Parser {
         *self.peek().get_type() == EOF
     }
 
-    fn consume(&mut self, token_type: TokenType, error: &str) {
-        unimplemented!()
+    fn consume(&mut self, token_type: TokenType, error: &str) -> Result<(), LoxError> {
+        if self.check(&token_type) {
+            self.advance();
+            return Ok(());
+        };
+
+        Err(LoxError::CustomError(self.current, error.to_string()))
     }
 }

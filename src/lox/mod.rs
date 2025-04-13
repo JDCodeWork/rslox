@@ -1,4 +1,4 @@
-mod expr;
+pub mod expr;
 mod run;
 mod scanner;
 mod parser;
