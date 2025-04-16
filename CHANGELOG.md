@@ -8,6 +8,10 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+### Changed
+
+- Refactor CLI handling system to improve functionality and structure.
+
 ## [0.5.0] - 2025-01-25
 
 ### Added

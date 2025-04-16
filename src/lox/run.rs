@@ -1,4 +1,4 @@
-use std::{fs, io, process, ptr::null};
+use std::{fs, io};
 
 use crate::{
     cli::Alert,
@@ -7,11 +7,7 @@ use crate::{
     tools::AstPrinter,
 };
 
-use super::{
-    expr::{self, Binary, Expr, Grouping, Literal, Unary},
-    parser::Parser,
-    token::Token,
-};
+use super::parser::Parser;
 
 pub fn run_file(path: String) {
     let path_formatted = if path.ends_with(".lox") {

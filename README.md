@@ -44,32 +44,44 @@ crq run -p <file_path>
 
 Replace `<file_path>` with the path to your `.lox` file.
 
-## Learning log
+---
 
-### Dynamic types [2025-01-10]
+## 📋 Current Features
 
-Rust as an innovate language compared to many others by providing a safe and efficient way to manage memory through concepts like **ownership**, **borrowing**, **lifetimes**, and the combined management of the **stack** and the **heap**
+### 📝 Scanner
+- **Single-character tokens:** `(` `)` `{` `}` `,` `.` `-` `+` `;` `/` `*`
+- **One or two-character tokens:** `!` `!=` `=` `==` `>` `>=` `<` `<=`
+- **Literals:**  
+  - Identifiers  
+  - Numbers  
+  - Strings  
+- **Keywords:**  
+  `and`, `class`, `else`, `false`, `fun`, `for`, `if`, `nil`, `or`, `print`, `return`, `super`, `this`, `true`, `var`, `while`
+- **Single-line comments:** `// ...`
+- **Block comments:** `/* ... */`
+- Emits an `EOF` token at the end of input
+- Error handling for:
+  - Invalid tokens
 
-For example, in Rust, it's possible to handle dynamic data flexible and securely using structures like the following:
+### 🌳 Parser
+- Parses **arithmetic expressions** with `+`, `-`, `*`, `/`
+- Respects **operator precedence and associativity**
+- Supports **grouping** with parentheses `()`
+- Generates an **Abstract Syntax Tree (AST)** for valid arithmetic expressions
+- Error handling for:
+  - Invalid tokens  
+  - Syntax errors  
+  - Unsupported keywords  
+- 🚫 No parsing for logic operators (`and`, `or`) yet
+- 🚫 No support for statements, declarations, or control structures yet
 
-```rust
-pub struct Token { 
-    literal: Box<dyn any::Any>,
-}
-```
+### 💻 Command Line Interface (CLI)
+- `run` — Interactive prompt for parsing expressions and printing the AST
+- `run -p <file_path>` — Parses and prints the AST for a file at the given path
+- `tools gen-ast` — Generates internal AST data structures
+- **Colored output** and enhanced CLI feedback
+- 🚫 `debug` command planned for future versions
 
-In this case:
-
-- **`Box`** allows the data to be stored on the **heap**, ensured that the Rust automatically handles its allocation and deallocation
-- **`dyn`** indicates that the specific type of the value is not know at the compile time.
-- **`any::Any`** allows the `literal` field to store values of any time that implements the `Any` trait.
-
-### Output buffering [2025-01-06]
-
-In many programming languages, data is temporarily stored in a location called a `buffer` before begin send to the console. This buffer holds the data until it's ready to be displayed
-
-But this data is only displayed when one of these conditions is met
-
-- The `buffer` is full
-- A newline `\n` is entered
-- **(Rust)** `flush` is explicitly called
+### 🖨️ Output
+- Prints the **AST** representation of valid arithmetic expressions
+- 🚫 No expression evaluation or runtime execution yet
