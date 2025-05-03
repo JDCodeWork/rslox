@@ -16,17 +16,21 @@ mod tools;
 mod utils;
 
 fn main() {
-
-    let command = Command::new("hello");
     let cli = Cli::parse();
 
     match &cli.command {
         Commands::Run {
-            path,
-            debug,
-            show_ast,
-            show_tokens,
-        } => {}
+            path: Some(path),
+            debug: _,
+            show_ast: _,
+            show_tokens: _,
+        } => handle_run_command(path),
+        Commands::Run {
+            path: None,
+            debug: _,
+            show_ast: _,
+            show_tokens: _,
+        } => run_prompt(),
         Commands::Tool { command } => {
             handle_tool_command(command);
         }
@@ -35,14 +39,8 @@ fn main() {
 
 // region: Command handlers
 
-fn handle_run_command(args: Vec<String>) {
-    if args.get(1).is_none() {
-        run_prompt();
-    } else if args[1] == "-p" && args.get(2).is_some() {
-        run_file(args[2].to_string());
-    } else {
-        Alert::error(format!("CLI | Not valid option: '{}'", args[1])).show_and_exit(1)
-    }
+fn handle_run_command(path: &str) {
+    run_file(path.to_string());
 }
 
 fn handle_tool_command(tool_type: &ToolCommand) {
