@@ -96,7 +96,7 @@ impl AstGenerator {
 }
 
 impl AstGenerator {
-    pub fn gen(&mut self, output_dir: String) {
+    pub fn gen(&mut self, output_dir: &String) {
         // imports
         self.add_content("use super::token::Token;\n\n");
 
@@ -208,7 +208,7 @@ impl AstGenerator {
         self.add_content(temp_content);
     }
 
-    fn save(&self, output_dir: String) {
+    fn save(&self, output_dir: &String) {
         let path = format!("{}/{}.rs", output_dir, self.base_enum_name.to_lowercase());
 
         let mut file = match File::create(&path) {

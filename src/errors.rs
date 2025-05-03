@@ -1,6 +1,6 @@
 use thiserror::Error as ThisError;
 
-use crate::cli::Alert;
+use crate::cli::alerts::Alert;
 
 pub struct Error {
     error_type: ErrorType,

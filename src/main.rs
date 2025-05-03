@@ -1,7 +1,12 @@
-use std::env;
+use std::{env, path::PathBuf};
 
-use cli::{show_help, Alert};
+use clap::{builder::styling, Command, Parser};
+use cli::{
+    alerts::{show_help, Alert},
+    commands::{Cli, Commands, ToolCommand},
+};
 use lox::{run_file, run_prompt};
+use owo_colors::{style, OwoColorize};
 use tools::AstGenerator;
 
 mod cli;
@@ -11,17 +16,20 @@ mod tools;
 mod utils;
 
 fn main() {
-    let mut args: Vec<String> = env::args().collect();
-    args.remove(0);
 
-    if args.len() < 1 {
-        return show_help();
-    }
+    let command = Command::new("hello");
+    let cli = Cli::parse();
 
-    match args[0].as_str() {
-        "run" => handle_run_command(args),
-        "tool" => handle_tool_command(args),
-        _ => Alert::error(format!("CLI | Not valid command: '{}'", args[0])).show_and_exit(1),
+    match &cli.command {
+        Commands::Run {
+            path,
+            debug,
+            show_ast,
+            show_tokens,
+        } => {}
+        Commands::Tool { command } => {
+            handle_tool_command(command);
+        }
     }
 }
 
@@ -37,16 +45,9 @@ fn handle_run_command(args: Vec<String>) {
     }
 }
 
-fn handle_tool_command(args: Vec<String>) {
-    let tool = match args.get(1) {
-        Some(t) => t.as_str(),
-        None => Alert::error(String::from("CLI | You must specify the name of the tool "))
-            .show_and_exit(1),
-    };
-
-    match tool {
-        "gen-ast" => handle_gen_ast_tool(args),
-        _ => Alert::error(format!("CLI | Tool '{}' not found", args[1])).show_and_exit(1),
+fn handle_tool_command(tool_type: &ToolCommand) {
+    match tool_type {
+        ToolCommand::GenAst { output_path } => handle_gen_ast_tool(output_path),
     }
 }
 
@@ -54,14 +55,7 @@ fn handle_tool_command(args: Vec<String>) {
 
 // region: Subcommand handlers
 
-fn handle_gen_ast_tool(args: Vec<String>) {
-    let path = match args.get(2) {
-        Some(p) => p.to_string(),
-        None => {
-            Alert::error(String::from("CLI | You must enter the output directory")).show_and_exit(1)
-        }
-    };
-
+fn handle_gen_ast_tool(output_path: &String) {
     let base_name = String::from("Expr");
     let ast_types = vec![
         "Binary   : Expr left, Token operator, Expr right",
@@ -73,7 +67,7 @@ fn handle_gen_ast_tool(args: Vec<String>) {
     .map(|t| t.to_string())
     .collect();
 
-    AstGenerator::new(base_name, ast_types).gen(path);
+    AstGenerator::new(base_name, ast_types).gen(output_path);
     Alert::success(String::from("CLI | AST successfully created")).show();
 }
 

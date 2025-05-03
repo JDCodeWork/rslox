@@ -1,48 +1,100 @@
 # rslox
 
-This repository is an example of one of the ways in which the `lox` programming language could be implemented by following the steps described in the book [***"crafting interpreters"***](https://craftinginterpreters.com/) by *Robert Nystrom*
+This repository is an example implementation of the `lox` programming language, following the steps described in the book [***"Crafting Interpreters"***](https://craftinginterpreters.com/) by *Robert Nystrom*.
 
-## How to Use
+---
+
+## 🚀 How to Use
 
 ### ⚠️ **Development Alias Recommendation**
 
-Since the project is currently in development, I recommend setting up an alias for the command `cargo run -q --` to make it easier to run the application while testing or trying it out. This will save time during development, as you won’t need to type the full command repeatedly.
+Since the project is currently in development, it's convenient to create an alias for `cargo run -q --` to speed up testing.
 
-To create the alias, add the following to your shell configuration file (e.g., `.bashrc`, `.zshrc`):
+Add the following to your shell configuration file (e.g., `.bashrc`, `.zshrc`):
 
 ```bash
 alias crq='cargo run -q --'
 ```
 
-Once you’ve added the alias, you can use `crq` instead of `cargo run -q --` for the commands below.
+Once added, you can use `crq` instead of `cargo run -q --` in the commands below.
 
-### Show Help
+---
 
-To view the help message with available commands and options, use:
+### 📖 Show Help
+
+To display the help message with available commands and options:
 
 ```bash
 crq --help 
 ```
 
-### Interactive Mode
+---
 
-To run the interpreter in interactive mode, use the following command:
+### 💻 Interactive Mode (REPL)
+
+To start the interpreter in interactive mode:
 
 ```bash
-crq run 
+crq run
 ```
 
-This will start the interpreter where you can type and execute code directly.
+This launches a REPL where you can type and execute code interactively.
 
-### Run From a File
+---
 
-To execute code from a file, use:
+### 📂 Run From a File
+
+To execute code from a `.lox` file:
 
 ```bash
 crq run -p <file_path>
 ```
 
 Replace `<file_path>` with the path to your `.lox` file.
+
+---
+
+### 🐛 Debug Mode
+
+To run in **debug mode**, which can optionally display tokens, the AST, or both:
+
+```bash
+crq run --debug
+```
+
+You can control what to display:
+
+```bash
+crq run --debug --show-ast
+crq run --debug --show-tokens
+crq run --debug --show-ast --show-tokens
+```
+
+✅ These options also work in interactive mode:
+
+```bash
+crq run --debug --show-ast
+```
+
+---
+
+### 🛠️ Tools
+
+Additional tools are available via the `tool` command:
+
+```bash
+crq tool <subcommand>
+```
+
+Available subcommands:
+
+- `gen-ast` — Generates internal AST data structures
+
+Example:
+
+```bash
+crq tool gen-ast
+```
 
 ---
 
@@ -63,6 +115,8 @@ Replace `<file_path>` with the path to your `.lox` file.
 - Error handling for:
   - Invalid tokens
 
+---
+
 ### 🌳 Parser
 - Parses **arithmetic expressions** with `+`, `-`, `*`, `/`
 - Respects **operator precedence and associativity**
@@ -75,13 +129,19 @@ Replace `<file_path>` with the path to your `.lox` file.
 - 🚫 No parsing for logic operators (`and`, `or`) yet
 - 🚫 No support for statements, declarations, or control structures yet
 
+---
+
 ### 💻 Command Line Interface (CLI)
-- `run` — Interactive prompt for parsing expressions and printing the AST
-- `run -p <file_path>` — Parses and prints the AST for a file at the given path
-- `tools gen-ast` — Generates internal AST data structures
+- `run` — Runs a `.lox` file or starts a REPL
+  - `--debug` — Activates a debug mode with optional output controls
+  - `--show-ast` — Shows the AST for each input
+  - `--show-tokens` — Shows the list of tokens for each input
+- `tool` — Executes development tools:
+  - `gen-ast`
 - **Colored output** and enhanced CLI feedback
-- 🚫 `debug` command planned for future versions
+
+---
 
 ### 🖨️ Output
-- Prints the **AST** representation of valid arithmetic expressions
+- Prints the **AST** and/or **tokens** based on selected options
 - 🚫 No expression evaluation or runtime execution yet

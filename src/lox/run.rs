@@ -1,7 +1,7 @@
 use std::{fs, io};
 
 use crate::{
-    cli::Alert,
+    cli::alerts::Alert,
     errors::{Error, SystemError},
     lox::scanner::Scanner,
     tools::AstPrinter,
