@@ -20,7 +20,7 @@ pub enum ErrorType {
     CLI(#[from] CLIError),
 }
 
-#[derive(ThisError, Debug)]
+#[derive(ThisError, Debug, PartialEq, Eq)]
 pub enum LoxError {
     #[error("Unexpected character.")]
     UnexpectedChar(usize),
