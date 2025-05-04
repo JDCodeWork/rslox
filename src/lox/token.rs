@@ -8,6 +8,16 @@ pub struct Token {
     line: isize,
 }
 
+impl PartialEq for Token {
+    fn eq(&self, other: &Self) -> bool {
+        self.token_type == other.token_type
+            && self.lexeme == other.lexeme
+            && self.line == other.line
+    }
+}
+
+impl Eq for Token {}
+
 impl Token {
     pub fn new(
         token_type: TokenType,
@@ -73,7 +83,7 @@ impl fmt::Display for Token {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen,

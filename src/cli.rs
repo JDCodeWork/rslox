@@ -3,7 +3,6 @@ pub mod commands {
 
     use clap::{Parser, Subcommand};
 
-
     #[derive(Parser)]
     #[command(name = "rslox", about = "Lox interpreter written in Rust")]
     pub struct Cli {

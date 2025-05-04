@@ -2,6 +2,7 @@ use crate::tools::AstPrinter;
 
 use super::token::Token;
 
+#[derive(PartialEq, Eq, Debug)]
 pub enum Expr {
     Binary(Binary),
     Grouping(Grouping),
@@ -38,20 +39,24 @@ impl Expr {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct Binary {
     left: Box<Expr>,
     operator: Token,
     right: Box<Expr>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct Grouping {
     expression: Box<Expr>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct Literal {
     value: String,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct Unary {
     operator: Token,
     right: Box<Expr>,

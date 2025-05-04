@@ -21,7 +21,11 @@ impl Parser {
 
 impl Parser {
     pub fn parse(&mut self) -> Result<Expr, LoxError> {
-        self.expression()
+        if self.tokens.is_empty() {
+            todo!()
+        } else {
+            self.expression()
+        }
     }
 
     fn expression(&mut self) -> Result<Expr, LoxError> {
@@ -179,5 +183,22 @@ impl Parser {
         };
 
         Err(LoxError::CustomError(self.current, error.to_string()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        errors::LoxError,
+        lox::parser::Parser,
+        lox::parser::{Token, TokenType},
+    };
+
+    #[test]
+    fn empty_stream() {
+        assert_eq!(
+            Parser::new(vec![Token::new(TokenType::EOF, String::new(), None, 0)]).parse(),
+            Err(LoxError::UnknownType(0)),
+        );
     }
 }

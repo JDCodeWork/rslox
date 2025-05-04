@@ -20,7 +20,7 @@ pub enum ErrorType {
     CLI(#[from] CLIError),
 }
 
-#[derive(ThisError, Debug)]
+#[derive(ThisError, Debug, PartialEq, Eq)]
 pub enum LoxError {
     #[error("Unexpected character.")]
     UnexpectedChar(usize),
@@ -38,7 +38,7 @@ impl LoxError {
             LoxError::UnexpectedChar(val)
             | LoxError::UnknownType(val)
             | LoxError::UnterminatedString(val) => *val,
-            | LoxError::CustomError(val, _) => *val
+            LoxError::CustomError(val, _) => *val,
         }
     }
 }
@@ -70,7 +70,7 @@ impl ErrorMsg for SystemError {
 #[derive(ThisError, Debug)]
 pub enum CLIError {
     #[error("Syntax invalid in AST tool")]
-    ASTSyntaxInvalid
+    ASTSyntaxInvalid,
 }
 
 impl ErrorMsg for CLIError {
