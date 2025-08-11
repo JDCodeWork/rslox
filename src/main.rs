@@ -1,19 +1,15 @@
-use std::{env, path::PathBuf};
-
-use clap::{builder::styling, Command, Parser};
+use clap::Parser;
 use cli::{
-    alerts::{show_help, Alert},
+    alerts::Alert,
     commands::{Cli, Commands, ToolCommand},
 };
 use lox::{run_file, run_prompt};
-use owo_colors::{style, OwoColorize};
 use tools::AstGenerator;
 
 mod cli;
 mod errors;
 mod lox;
 mod tools;
-mod utils;
 
 fn main() {
     let cli = Cli::parse();

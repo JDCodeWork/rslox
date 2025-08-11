@@ -1,10 +1,9 @@
-use std::{any, fmt, rc::Rc};
+use std::fmt;
 
 #[derive(Debug, Clone)]
 pub struct Token {
     token_type: TokenType,
     lexeme: String,
-    literal: Option<Rc<dyn any::Any>>,
     line: isize,
 }
 
@@ -19,16 +18,10 @@ impl PartialEq for Token {
 impl Eq for Token {}
 
 impl Token {
-    pub fn new(
-        token_type: TokenType,
-        lexeme: String,
-        literal: Option<Rc<dyn any::Any>>,
-        line: isize,
-    ) -> Self {
+    pub fn new(token_type: TokenType, lexeme: String, line: isize) -> Self {
         Token {
             token_type,
             lexeme,
-            literal,
             line,
         }
     }
@@ -39,20 +32,11 @@ impl Token {
         &self.token_type
     }
 
-    pub fn get_literal(&self) -> String {
-        match &self.literal {
-            None => String::new(),
-            Some(literal) => {
-                if let Some(string) = literal.downcast_ref::<String>() {
-                    string.clone()
-                } else if let Some(int) = literal.downcast_ref::<i32>() {
-                    int.to_string()
-                } else if let Some(float) = literal.downcast_ref::<f64>() {
-                    float.to_string()
-                } else {
-                    String::new()
-                }
-            }
+    pub fn get_literal_as_string(&self) -> Option<String> {
+        match &self.token_type {
+            TokenType::String(val) => Some(val.clone()),
+            TokenType::Number(val) => Some(val.to_string()),
+            _ => None,
         }
     }
 
@@ -63,16 +47,9 @@ impl Token {
 
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let literal = if let Some(val) = &self.literal {
-            if let Some(lit) = val.downcast_ref::<String>() {
-                lit.clone()
-            } else if let Some(lit) = val.downcast_ref::<f64>() {
-                lit.to_string()
-            } else {
-                String::from("Unknown type")
-            }
-        } else {
-            String::new()
+        let literal = match self.get_literal_as_string() {
+            Some(val) => val,
+            None => String::new(),
         };
 
         write!(
@@ -83,7 +60,7 @@ impl fmt::Display for Token {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
     // Single-character tokens.
     LeftParen,
@@ -110,8 +87,8 @@ pub enum TokenType {
 
     // Literals.
     Identifier,
-    String,
-    Number,
+    String(String),
+    Number(f64),
 
     // Keywords.
     And,

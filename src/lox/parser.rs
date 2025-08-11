@@ -109,8 +109,8 @@ impl Parser {
                 self.advance();
                 Expr::Literal(Literal::new("null".to_string()))
             }
-            Number | String => {
-                let lit = self.peek().get_literal().to_string();
+            Number(_) | String(_) => {
+                let lit = self.peek().get_literal_as_string().unwrap_or_default();
                 self.advance();
                 Expr::Literal(Literal::new(lit))
             }
@@ -197,7 +197,7 @@ mod tests {
     #[test]
     fn empty_stream() {
         assert_eq!(
-            Parser::new(vec![Token::new(TokenType::EOF, String::new(), None, 0)]).parse(),
+            Parser::new(vec![Token::new(TokenType::EOF, String::new(), 0)]).parse(),
             Err(LoxError::UnknownType(0)),
         );
     }

@@ -1,6 +1,4 @@
 pub mod commands {
-    use std::path::PathBuf;
-
     use clap::{Parser, Subcommand};
 
     #[derive(Parser)]
@@ -52,10 +50,7 @@ pub mod commands {
 pub mod alerts {
     use std::process;
 
-    use owo_colors::{
-        colors::{css::DarkGray, Black, Blue, Cyan, Green, Yellow},
-        AnsiColors, DynColors, OwoColorize,
-    };
+    use owo_colors::{AnsiColors, DynColors, OwoColorize};
 
     pub struct Alert {
         name: String,
@@ -135,46 +130,5 @@ pub mod alerts {
             println!("{name} {msg}");
             process::exit(code)
         }
-    }
-
-    pub fn show_help() {
-        println!("\n{}", " USAGE ".fg::<Black>().bg::<Green>());
-        println!(
-            "\n{} {} {} {}",
-            "$".fg::<DarkGray>(),
-            "rslox".fg::<Green>(),
-            "<COMMAND>".fg::<Cyan>(),
-            "[OPTION]".fg::<Yellow>()
-        );
-
-        println!("\n{}\n", " COMMANDS ".fg::<Black>().bg::<Blue>());
-        show_command("run", "run lox code");
-        show_command("tool", "use one of the debugging tool");
-
-        println!("\n{}\n", " OPTIONS ".fg::<Black>().bg::<Yellow>());
-        print!("{} {} ", "$".fg::<DarkGray>(), "rslox".fg::<Green>());
-        println!("{}\t\t\t\t{}\n", "--help".yellow(), "Show help info");
-
-        print!("{} {} ", "$".fg::<DarkGray>(), "rslox".fg::<Green>());
-        println!(
-            "{} {} {}\t\t\t{}",
-            "run".fg::<Blue>().italic(),
-            "-p".yellow(),
-            "<PATH>".fg::<DarkGray>().italic(),
-            "Path of the file to run"
-        );
-
-        print!("{} {} ", "$".fg::<DarkGray>(), "rslox".fg::<Green>());
-        println!(
-            "{} {} {}\t{}",
-            "tool".fg::<Blue>().italic(),
-            "gen-ast".yellow(),
-            "<OUTPUT_DIR>".fg::<DarkGray>().italic(),
-            "Generates definition file for the ast"
-        )
-    }
-
-    fn show_command(name: &str, desc: &str) {
-        println!("{}\t{}", name.blue(), desc.italic());
     }
 }

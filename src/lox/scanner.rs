@@ -1,4 +1,4 @@
-use std::{any::Any, collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 
 use crate::errors::{Error, LoxError};
 
@@ -59,7 +59,6 @@ impl Scanner {
         self.tokens.push(Token::new(
             TokenType::EOF,
             String::new(),
-            None,
             self.line as isize,
         ));
         &self.tokens
@@ -69,16 +68,16 @@ impl Scanner {
         let c = self.advance();
 
         match c {
-            '(' => self.add_token(TokenType::LeftParen, None),
-            ')' => self.add_token(TokenType::RightParen, None),
-            '{' => self.add_token(TokenType::LeftBrace, None),
-            '}' => self.add_token(TokenType::RightBrace, None),
-            ',' => self.add_token(TokenType::Comma, None),
-            '.' => self.add_token(TokenType::Dot, None),
-            '-' => self.add_token(TokenType::Minus, None),
-            '+' => self.add_token(TokenType::Plus, None),
-            ';' => self.add_token(TokenType::Semicolon, None),
-            '*' => self.add_token(TokenType::Star, None),
+            '(' => self.add_token(TokenType::LeftParen),
+            ')' => self.add_token(TokenType::RightParen),
+            '{' => self.add_token(TokenType::LeftBrace),
+            '}' => self.add_token(TokenType::RightBrace),
+            ',' => self.add_token(TokenType::Comma),
+            '.' => self.add_token(TokenType::Dot),
+            '-' => self.add_token(TokenType::Minus),
+            '+' => self.add_token(TokenType::Plus),
+            ';' => self.add_token(TokenType::Semicolon),
+            '*' => self.add_token(TokenType::Star),
             '!' => {
                 let token_type = if self.match_char('=') {
                     TokenType::BangEqual
@@ -86,7 +85,7 @@ impl Scanner {
                     TokenType::Bang
                 };
 
-                self.add_token(token_type, None)
+                self.add_token(token_type)
             }
             '=' => {
                 let token_type = if self.match_char('=') {
@@ -95,7 +94,7 @@ impl Scanner {
                     TokenType::Equal
                 };
 
-                self.add_token(token_type, None)
+                self.add_token(token_type)
             }
             '<' => {
                 let token_type = if self.match_char('=') {
@@ -104,7 +103,7 @@ impl Scanner {
                     TokenType::Less
                 };
 
-                self.add_token(token_type, None)
+                self.add_token(token_type)
             }
             '>' => {
                 let token_type = if self.match_char('=') {
@@ -113,7 +112,7 @@ impl Scanner {
                     TokenType::Greater
                 };
 
-                self.add_token(token_type, None)
+                self.add_token(token_type)
             }
             '/' => {
                 if self.match_char('/') {
@@ -143,7 +142,7 @@ impl Scanner {
                         self.advance();
                     }
                 } else {
-                    self.add_token(TokenType::Slash, None);
+                    self.add_token(TokenType::Slash);
                 }
             }
             ' ' | '\r' | '\t' => {}
@@ -157,7 +156,7 @@ impl Scanner {
         };
     }
 
-    fn add_token(&mut self, token_type: TokenType, literal: Option<Rc<dyn Any>>) {
+    fn add_token(&mut self, token_type: TokenType) {
         let Self {
             current,
             start,
@@ -167,12 +166,7 @@ impl Scanner {
         } = self;
 
         let text = &source[*start..*current];
-        tokens.push(Token::new(
-            token_type,
-            text.to_string(),
-            literal,
-            *line as isize,
-        ));
+        tokens.push(Token::new(token_type, text.to_string(), *line as isize));
     }
 
     fn is_at_end(&self) -> bool {
@@ -233,7 +227,7 @@ impl Scanner {
 
         // Trim the surrounding quotes
         let literal = &self.source[(self.start + 1)..(self.current - 1)];
-        self.add_token(TokenType::String, Some(Rc::new(literal.to_string())));
+        self.add_token(TokenType::String(literal.to_string()));
     }
 
     fn number(&mut self) {
@@ -257,7 +251,7 @@ impl Scanner {
                 Error::from(LoxError::UnknownType(self.line)).report_and_exit(1);
             }
         };
-        self.add_token(TokenType::Number, Some(Rc::new(literal)));
+        self.add_token(TokenType::Number(literal));
     }
 
     fn peek_next(&self) -> char {
@@ -280,6 +274,6 @@ impl Scanner {
             TokenType::Identifier
         };
 
-        self.add_token(token_type, None);
+        self.add_token(token_type);
     }
 }

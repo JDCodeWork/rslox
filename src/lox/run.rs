@@ -60,9 +60,9 @@ fn run(raw_code: &str) -> Result<(), Error> {
 
     let mut parser = Parser::new(tokens.clone());
 
-    /* for token in tokens {
+    for token in tokens {
         Alert::info(token.to_string()).show();
-    } */
+    }
 
     let expr = match parser.parse() {
         Ok(expr) => expr,
