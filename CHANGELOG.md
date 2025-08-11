@@ -11,6 +11,7 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com).
 ### Changed
 
 - Refactor CLI handling system to improve functionality and structure.
+- Literals embedded into `TokenType`
 
 ## [0.5.0] - 2025-01-25
 

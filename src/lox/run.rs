@@ -55,6 +55,7 @@ pub fn run_prompt() {
 }
 
 fn run(raw_code: &str) -> Result<(), Error> {
+    // TODO: Separate the use of hte scanner and the creation of tokens to implement debug mode
     let mut scanner = Scanner::new(raw_code.to_string());
     let tokens = scanner.scan_tokens();
 
