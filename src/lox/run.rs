@@ -3,33 +3,77 @@ use std::{fs, io};
 use crate::{
     cli::alerts::Alert,
     errors::{Error, SystemError},
-    lox::scanner::Scanner,
+    lox::{scanner::Scanner, token::Token},
     tools::AstPrinter,
 };
 
 use super::parser::Parser;
 
-pub fn run_file(path: String) {
-    let path_formatted = if path.ends_with(".lox") {
-        Alert::warning("CLI | It's not necessary to include .lox extension".to_string()).show();
-        path
-    } else if path.contains('.') {
-        Error::from(SystemError::InvalidFileExtension).report_and_exit(1);
-    } else {
-        format!("{path}.lox")
-    };
-
-    let raw_code = match fs::read_to_string(&path_formatted) {
-        Ok(val) => val,
-        Err(..) => Error::from(SystemError::FileNotFound(path_formatted)).report_and_exit(1),
-    };
-
-    if let Err(e) = run(&raw_code) {
-        e.report_and_exit(67);
+pub struct RunOptsCommand {
+    debug: Option<bool>,
+    show_ast: Option<bool>,
+    show_tokes: Option<bool>,
+}
+impl Default for RunOptsCommand {
+    fn default() -> Self {
+        RunOptsCommand {
+            debug: None,
+            show_ast: None,
+            show_tokes: None,
+        }
     }
 }
 
-pub fn run_prompt() {
+pub fn handle_run_command(path: Option<String>, opts: Option<RunOptsCommand>) {
+    let mut source: String;
+
+    if let Some(path) = path {
+        let valid_path = handle_path_format(&path);
+        source = read_file(&valid_path);
+    } else {
+        // TODO: When interactive mode is enable, notify the user to the exit, they should type 'exit' and press Enter
+        source = read_prompt();
+    }
+
+    let mut scanner = Scanner::new(source.to_string());
+    let tokens = scanner.scan_tokens();
+
+    let RunOptsCommand {
+        debug,
+        show_ast,
+        show_tokes,
+    } = opts.unwrap_or_default();
+
+    // TODO: If debug mode is enable and none of the other settings have a value, execute all settings as if they were true
+    if let Some(true) = debug {
+        for token in tokens {
+            println!("{token}");
+        }
+    }
+
+    run(tokens.clone());
+}
+
+fn handle_path_format(path: &str) -> String {
+    if path.ends_with(".lox") {
+        Alert::warning("CLI | It's not necessary to include .lox extension".to_string()).show();
+        path.to_string()
+    } else if path.to_string().contains('.') {
+        Error::from(SystemError::InvalidFileExtension).report_and_exit(1);
+    } else {
+        format!("{path}.lox")
+    }
+}
+
+fn read_file(path: &str) -> String {
+    match fs::read_to_string(path) {
+        Ok(val) => val,
+        Err(..) => Error::from(SystemError::FileNotFound(path.to_string())).report_and_exit(1),
+    }
+}
+
+fn read_prompt() -> String {
+    let mut source = String::new();
     let mut line = String::new();
 
     loop {
@@ -50,28 +94,21 @@ pub fn run_prompt() {
             break;
         }
 
-        run(&line).map_err(|e| e.report()).ok();
+        if line.trim() == "exit" {
+            break;
+        }
+
+        source.push_str(&line);
     }
+
+    source
 }
 
-fn run(raw_code: &str) -> Result<(), Error> {
-    // TODO: Separate the use of hte scanner and the creation of tokens to implement debug mode
-    let mut scanner = Scanner::new(raw_code.to_string());
-    let tokens = scanner.scan_tokens();
+fn run(tokens: Vec<Token>) -> Result<(), Error> {
+    let mut parser = Parser::new(tokens);
 
-    let mut parser = Parser::new(tokens.clone());
-
-    for token in tokens {
-        Alert::info(token.to_string()).show();
-    }
-
-    let expr = match parser.parse() {
-        Ok(expr) => expr,
+    match parser.parse() {
+        Ok(..) => Ok(()),
         Err(lox_error) => Error::from(lox_error).report_and_exit(1),
-    };
-
-    print!("\n");
-    Alert::info(format!("AST -> {}", AstPrinter::print(expr))).show();
-
-    Ok(())
+    }
 }

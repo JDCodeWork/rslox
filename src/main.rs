@@ -3,8 +3,9 @@ use cli::{
     alerts::Alert,
     commands::{Cli, Commands, ToolCommand},
 };
-use lox::{run_file, run_prompt};
 use tools::AstGenerator;
+
+use crate::lox::handle_run_command;
 
 mod cli;
 mod errors;
@@ -15,18 +16,13 @@ fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
+        // TODO: Send debug opts to handle_run_command
         Commands::Run {
-            path: Some(path),
+            path,
             debug: _,
             show_ast: _,
             show_tokens: _,
-        } => handle_run_command(path),
-        Commands::Run {
-            path: None,
-            debug: _,
-            show_ast: _,
-            show_tokens: _,
-        } => run_prompt(),
+        } => handle_run_command(path.to_owned(), None),
         Commands::Tool { command } => {
             handle_tool_command(command);
         }
@@ -34,10 +30,6 @@ fn main() {
 }
 
 // region: Command handlers
-
-fn handle_run_command(path: &str) {
-    run_file(path.to_string());
-}
 
 fn handle_tool_command(tool_type: &ToolCommand) {
     match tool_type {
