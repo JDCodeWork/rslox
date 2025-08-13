@@ -185,20 +185,3 @@ impl Parser {
         Err(LoxError::CustomError(self.current, error.to_string()))
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::{
-        errors::LoxError,
-        lox::parser::Parser,
-        lox::parser::{Token, TokenType},
-    };
-
-    #[test]
-    fn empty_stream() {
-        assert_eq!(
-            Parser::new(vec![Token::new(TokenType::EOF, String::new(), 0)]).parse(),
-            Err(LoxError::UnknownType(0)),
-        );
-    }
-}

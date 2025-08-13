@@ -4,4 +4,4 @@ mod run;
 mod scanner;
 pub mod token;
 
-pub use run::handle_run_command;
+pub use run::{handle_run_command, RunOptsCommand};

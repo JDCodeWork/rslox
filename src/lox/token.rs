@@ -43,6 +43,10 @@ impl Token {
     pub fn get_lexeme(&self) -> String {
         self.lexeme.clone()
     }
+
+    pub fn get_line(&self) -> isize {
+        self.line
+    }
 }
 
 impl fmt::Display for Token {

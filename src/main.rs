@@ -5,7 +5,7 @@ use cli::{
 };
 use tools::AstGenerator;
 
-use crate::lox::handle_run_command;
+use crate::lox::{handle_run_command, RunOptsCommand};
 
 mod cli;
 mod errors;
@@ -19,10 +19,17 @@ fn main() {
         // TODO: Send debug opts to handle_run_command
         Commands::Run {
             path,
-            debug: _,
-            show_ast: _,
-            show_tokens: _,
-        } => handle_run_command(path.to_owned(), None),
+            debug,
+            show_ast,
+            show_tokens,
+        } => handle_run_command(
+            path.to_owned(),
+            RunOptsCommand {
+                debug: *debug,
+                show_ast: *show_ast,
+                show_tokens: *show_tokens,
+            },
+        ),
         Commands::Tool { command } => {
             handle_tool_command(command);
         }

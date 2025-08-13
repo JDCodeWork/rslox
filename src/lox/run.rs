@@ -1,4 +1,4 @@
-use std::{fs, io};
+use std::{collections::BTreeMap, fs, io};
 
 use crate::{
     cli::alerts::Alert,
@@ -10,45 +10,56 @@ use crate::{
 use super::parser::Parser;
 
 pub struct RunOptsCommand {
-    debug: Option<bool>,
-    show_ast: Option<bool>,
-    show_tokes: Option<bool>,
+    pub debug: bool,
+    pub show_ast: bool,
+    pub show_tokens: bool,
 }
 impl Default for RunOptsCommand {
     fn default() -> Self {
         RunOptsCommand {
-            debug: None,
-            show_ast: None,
-            show_tokes: None,
+            debug: false,
+            show_ast: false,
+            show_tokens: false,
         }
     }
 }
 
-pub fn handle_run_command(path: Option<String>, opts: Option<RunOptsCommand>) {
-    let mut source: String;
+pub fn handle_run_command(path: Option<String>, opts: RunOptsCommand) {
+    let RunOptsCommand {
+        debug,
+        show_ast,
+        show_tokens,
+    } = opts;
+
+    let source: String;
 
     if let Some(path) = path {
         let valid_path = handle_path_format(&path);
         source = read_file(&valid_path);
     } else {
-        // TODO: When interactive mode is enable, notify the user to the exit, they should type 'exit' and press Enter
+        Alert::info("CLI | No file path provided, reading from prompt...".to_string()).show();
+        Alert::info("CLI | To exit, press Enter on an empty line.".to_string()).show();
+
         source = read_prompt();
     }
 
     let mut scanner = Scanner::new(source.to_string());
     let tokens = scanner.scan_tokens();
 
-    let RunOptsCommand {
-        debug,
-        show_ast,
-        show_tokes,
-    } = opts.unwrap_or_default();
+    if debug && !show_ast && !show_tokens {
+        Alert::info("CLI | Debug mode is enabled.".to_string()).show();
+        debug_show_tokens(tokens.clone());
+        debug_show_ast(tokens.clone());
+    }
 
-    // TODO: If debug mode is enable and none of the other settings have a value, execute all settings as if they were true
-    if let Some(true) = debug {
-        for token in tokens {
-            println!("{token}");
-        }
+    if show_ast {
+        println!("--- AST ---");
+        debug_show_ast(tokens.clone());
+    }
+
+    if show_tokens {
+        println!("--- TOKENS ---");
+        debug_show_tokens(tokens.clone());
     }
 
     run(tokens.clone());
@@ -89,12 +100,8 @@ fn read_prompt() -> String {
             Error::from(SystemError::Io(e)).report();
         }
 
-        if line.is_empty() {
+        if line.trim().is_empty() {
             print!("\n");
-            break;
-        }
-
-        if line.trim() == "exit" {
             break;
         }
 
@@ -110,5 +117,34 @@ fn run(tokens: Vec<Token>) -> Result<(), Error> {
     match parser.parse() {
         Ok(..) => Ok(()),
         Err(lox_error) => Error::from(lox_error).report_and_exit(1),
+    }
+}
+
+fn debug_show_tokens(tokens: Vec<Token>) {
+    for token in tokens {
+        Alert::info(token.to_string()).show();
+    }
+}
+
+fn debug_show_ast(tokens: Vec<Token>) {
+    let mut tokens_by_line: BTreeMap<usize, Vec<Token>> = BTreeMap::new();
+
+    for token in tokens {
+        tokens_by_line
+            .entry(token.get_line() as usize)
+            .or_default()
+            .push(token);
+    }
+
+    for (line, line_tokens) in tokens_by_line {
+        let mut parser = Parser::new(line_tokens.clone());
+        match parser.parse() {
+            Ok(expr) => {
+                Alert::info(format!("AST (line {line}) -> {}", AstPrinter::print(expr))).show();
+            }
+            Err(lox_error) => {
+                Error::from(lox_error).report_and_exit(1);
+            }
+        }
     }
 }
