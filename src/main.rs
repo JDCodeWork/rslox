@@ -16,7 +16,6 @@ fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
-        // TODO: Send debug opts to handle_run_command
         Commands::Run {
             path,
             debug,

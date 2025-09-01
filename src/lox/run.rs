@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, fs, io};
 use crate::{
     cli::alerts::Alert,
     errors::{Error, SystemError},
-    lox::{scanner::Scanner, token::Token},
+    lox::{scanner::Scanner, token::{Token, TokenType}},
     tools::AstPrinter,
 };
 
@@ -41,6 +41,10 @@ pub fn handle_run_command(path: Option<String>, opts: RunOptsCommand) {
         Alert::info("CLI | To exit, press Enter on an empty line.".to_string()).show();
 
         source = read_prompt();
+        
+        if source.trim().is_empty() {
+            return;
+        }
     }
 
     let mut scanner = Scanner::new(source.to_string());
@@ -53,16 +57,14 @@ pub fn handle_run_command(path: Option<String>, opts: RunOptsCommand) {
     }
 
     if show_ast {
-        println!("--- AST ---");
         debug_show_ast(tokens.clone());
     }
 
     if show_tokens {
-        println!("--- TOKENS ---");
         debug_show_tokens(tokens.clone());
     }
 
-    run(tokens.clone());
+    run(tokens.clone()).unwrap();
 }
 
 fn handle_path_format(path: &str) -> String {
@@ -99,7 +101,6 @@ fn read_prompt() -> String {
         if let Err(e) = io::stdin().read_line(&mut line) {
             Error::from(SystemError::Io(e)).report();
         }
-
         if line.trim().is_empty() {
             print!("\n");
             break;
@@ -137,6 +138,12 @@ fn debug_show_ast(tokens: Vec<Token>) {
     }
 
     for (line, line_tokens) in tokens_by_line {
+        // Skip empty lines or lines with only EOF token
+        if line_tokens.is_empty() || 
+           (line_tokens.len() == 1 && *line_tokens[0].get_type() == TokenType::EOF) {
+            continue;
+        }
+        
         let mut parser = Parser::new(line_tokens.clone());
         match parser.parse() {
             Ok(expr) => {

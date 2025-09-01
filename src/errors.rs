@@ -2,6 +2,7 @@ use thiserror::Error as ThisError;
 
 use crate::cli::alerts::Alert;
 
+#[derive(Debug)]
 pub struct Error {
     error_type: ErrorType,
 }

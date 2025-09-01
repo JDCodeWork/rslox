@@ -21,8 +21,10 @@ impl Parser {
 
 impl Parser {
     pub fn parse(&mut self) -> Result<Expr, LoxError> {
-        if self.tokens.is_empty() {
-            todo!()
+        if self.tokens.is_empty()
+            || (self.tokens.len() == 1 && *self.tokens[0].get_type() == TokenType::EOF)
+        {
+            return Err(LoxError::CustomError(0, "Empty input".to_string()));
         } else {
             self.expression()
         }
