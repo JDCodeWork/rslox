@@ -5,8 +5,9 @@ This project adheres to [Semantic Versioning](https://semver.org).
 The format is inspired by [Keep a Changelog](https://keepachangelog.com).
 
 ---
-
 ## [Unreleased]
+
+## [0.5.1] - 2025-09-13
 
 ### Changed
 

@@ -3,7 +3,10 @@ use std::{collections::BTreeMap, fs, io};
 use crate::{
     cli::alerts::Alert,
     errors::{Error, SystemError},
-    lox::{scanner::Scanner, token::{Token, TokenType}},
+    lox::{
+        scanner::Scanner,
+        token::{Token, TokenType},
+    },
     tools::AstPrinter,
 };
 
@@ -41,7 +44,7 @@ pub fn handle_run_command(path: Option<String>, opts: RunOptsCommand) {
         Alert::info("CLI | To exit, press Enter on an empty line.".to_string()).show();
 
         source = read_prompt();
-        
+
         if source.trim().is_empty() {
             return;
         }
@@ -69,12 +72,9 @@ pub fn handle_run_command(path: Option<String>, opts: RunOptsCommand) {
 
 fn handle_path_format(path: &str) -> String {
     if path.ends_with(".lox") {
-        Alert::warning("CLI | It's not necessary to include .lox extension".to_string()).show();
         path.to_string()
-    } else if path.to_string().contains('.') {
-        Error::from(SystemError::InvalidFileExtension).report_and_exit(1);
     } else {
-        format!("{path}.lox")
+        Error::from(SystemError::InvalidFileExtension).report_and_exit(1);
     }
 }
 
@@ -139,11 +139,12 @@ fn debug_show_ast(tokens: Vec<Token>) {
 
     for (line, line_tokens) in tokens_by_line {
         // Skip empty lines or lines with only EOF token
-        if line_tokens.is_empty() || 
-           (line_tokens.len() == 1 && *line_tokens[0].get_type() == TokenType::EOF) {
+        if line_tokens.is_empty()
+            || (line_tokens.len() == 1 && *line_tokens[0].get_type() == TokenType::EOF)
+        {
             continue;
         }
-        
+
         let mut parser = Parser::new(line_tokens.clone());
         match parser.parse() {
             Ok(expr) => {
