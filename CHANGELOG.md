@@ -5,7 +5,12 @@ This project adheres to [Semantic Versioning](https://semver.org).
 The format is inspired by [Keep a Changelog](https://keepachangelog.com).
 
 ---
+
 ## [Unreleased]
+
+### Added
+
+- Simple panic mode for errors
 
 ## [0.5.1] - 2025-09-13
 

@@ -277,3 +277,187 @@ impl Scanner {
         self.add_token(token_type);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_single_character_tokens() {
+        let mut scanner = Scanner::new("(){},.+-;*".to_string());
+        let tokens = scanner.scan_tokens();
+
+        let expected_types = vec![
+            TokenType::LeftParen,
+            TokenType::RightParen,
+            TokenType::LeftBrace,
+            TokenType::RightBrace,
+            TokenType::Comma,
+            TokenType::Dot,
+            TokenType::Plus,
+            TokenType::Minus,
+            TokenType::Semicolon,
+            TokenType::Star,
+            TokenType::EOF,
+        ];
+
+        assert_eq!(tokens.len(), expected_types.len());
+
+        for (i, expected_type) in expected_types.iter().enumerate() {
+            assert_eq!(tokens[i].get_type(), expected_type);
+        }
+    }
+
+    #[test]
+    fn test_two_character_tokens() {
+        let mut scanner = Scanner::new("!= == <= >=".to_string());
+        let tokens = scanner.scan_tokens();
+
+        let expected_types = vec![
+            TokenType::BangEqual,
+            TokenType::EqualEqual,
+            TokenType::LessEqual,
+            TokenType::GreaterEqual,
+            TokenType::EOF,
+        ];
+
+        for (i, expected_type) in expected_types.iter().enumerate() {
+            assert_eq!(tokens[i].get_type(), expected_type);
+        }
+    }
+
+    #[test]
+    fn test_string_literals() {
+        let mut scanner = Scanner::new(r#""hello" "world with spaces""#.to_string());
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens.len(), 3); // two strings + EOF
+
+        match tokens[0].get_type() {
+            TokenType::String(value) => assert_eq!(value, "hello"),
+            _ => panic!("Expected string token"),
+        }
+
+        match tokens[1].get_type() {
+            TokenType::String(value) => assert_eq!(value, "world with spaces"),
+            _ => panic!("Expected string token"),
+        }
+    }
+
+    #[test]
+    fn test_number_literals() {
+        let mut scanner = Scanner::new("123 456.789 0.5".to_string());
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens.len(), 4); // three numbers + EOF
+
+        match tokens[0].get_type() {
+            TokenType::Number(value) => assert_eq!(*value, 123.0),
+            _ => panic!("Expected number token"),
+        }
+
+        match tokens[1].get_type() {
+            TokenType::Number(value) => assert_eq!(*value, 456.789),
+            _ => panic!("Expected number token"),
+        }
+
+        match tokens[2].get_type() {
+            TokenType::Number(value) => assert_eq!(*value, 0.5),
+            _ => panic!("Expected number token"),
+        }
+    }
+
+    #[test]
+    fn test_keywords() {
+        let mut scanner = Scanner::new("if else true false nil".to_string());
+        let tokens = scanner.scan_tokens();
+
+        let expected_types = vec![
+            TokenType::If,
+            TokenType::Else,
+            TokenType::True,
+            TokenType::False,
+            TokenType::Nil,
+            TokenType::EOF,
+        ];
+
+        for (i, expected_type) in expected_types.iter().enumerate() {
+            assert_eq!(tokens[i].get_type(), expected_type);
+        }
+    }
+
+    #[test]
+    fn test_identifiers() {
+        let mut scanner = Scanner::new("variable_name function123 _underscore".to_string());
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens.len(), 4); // three identifiers + EOF
+
+        for i in 0..3 {
+            assert_eq!(tokens[i].get_type(), &TokenType::Identifier);
+        }
+
+        assert_eq!(tokens[0].get_lexeme(), "variable_name");
+        assert_eq!(tokens[1].get_lexeme(), "function123");
+        assert_eq!(tokens[2].get_lexeme(), "_underscore");
+    }
+
+    #[test]
+    fn test_comments() {
+        let mut scanner = Scanner::new("// this is a comment\n123".to_string());
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens.len(), 2); // number + EOF (comment ignored)
+
+        match tokens[0].get_type() {
+            TokenType::Number(value) => assert_eq!(*value, 123.0),
+            _ => panic!("Expected number token"),
+        }
+    }
+
+    #[test]
+    fn test_block_comments() {
+        let mut scanner = Scanner::new("/* block comment */ 456".to_string());
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens.len(), 2); // number + EOF (comment ignored)
+
+        match tokens[0].get_type() {
+            TokenType::Number(value) => assert_eq!(*value, 456.0),
+            _ => panic!("Expected number token"),
+        }
+    }
+
+    #[test]
+    fn test_line_counting() {
+        let mut scanner = Scanner::new("123\n456\n789".to_string());
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens[0].get_line(), 1);
+        assert_eq!(tokens[1].get_line(), 2);
+        assert_eq!(tokens[2].get_line(), 3);
+    }
+
+    #[test]
+    fn test_expression() {
+        let mut scanner = Scanner::new("1 + 2 * (3 - 4)".to_string());
+        let tokens = scanner.scan_tokens();
+
+        let expected_types = vec![
+            TokenType::Number(1.0),
+            TokenType::Plus,
+            TokenType::Number(2.0),
+            TokenType::Star,
+            TokenType::LeftParen,
+            TokenType::Number(3.0),
+            TokenType::Minus,
+            TokenType::Number(4.0),
+            TokenType::RightParen,
+            TokenType::EOF,
+        ];
+
+        for (i, expected_type) in expected_types.iter().enumerate() {
+            assert_eq!(tokens[i].get_type(), expected_type);
+        }
+    }
+}

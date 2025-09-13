@@ -186,4 +186,23 @@ impl Parser {
 
         Err(LoxError::CustomError(self.current, error.to_string()))
     }
+
+    fn synchronize(&mut self) {
+        self.advance();
+
+        while !self.is_at_end() {
+            if self.previous().get_type() == &Semicolon {
+                return;
+            }
+
+            match *self.peek().get_type() {
+                Class | Fun | Var | For | If | While | Print | Return => {
+                    return;
+                }
+                _ => {
+                    self.advance();
+                }
+            }
+        }
+    }
 }
