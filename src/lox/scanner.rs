@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::errors::{Error, LoxError};
+use crate::errors::{Error, ScanError};
 
 use super::token::{Token, TokenType};
 
@@ -133,7 +133,7 @@ impl Scanner {
                     }
 
                     if self.is_at_end() {
-                        Error::from(LoxError::UnterminatedString(self.line)).report();
+                        Error::from(ScanError::UnterminatedString(self.line)).report();
                         return;
                     }
 
@@ -151,7 +151,7 @@ impl Scanner {
             ch if ch.is_ascii_digit() => self.number(),
             ch if ch.is_ascii_alphabetic() || ch == '_' => self.identifier(),
             _ => {
-                Error::from(LoxError::UnexpectedChar(self.line)).report();
+                Error::from(ScanError::UnexpectedChar(self.line)).report();
             }
         };
     }
@@ -218,7 +218,7 @@ impl Scanner {
         }
 
         if self.is_at_end() {
-            Error::from(LoxError::UnterminatedString(self.line)).report();
+            Error::from(ScanError::UnterminatedString(self.line)).report();
             return;
         }
 
@@ -247,9 +247,7 @@ impl Scanner {
 
         let literal: f64 = match &self.source[self.start..self.current].parse() {
             Ok(n) => *n,
-            Err(..) => {
-                Error::from(LoxError::UnknownType(self.line)).report_and_exit(1);
-            }
+            Err(..) => 0.0, // Fallback value, shouldn't happen with valid scan
         };
         self.add_token(TokenType::Number(literal));
     }

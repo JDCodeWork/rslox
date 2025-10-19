@@ -14,7 +14,11 @@ trait ErrorMsg {
 #[derive(ThisError, Debug)]
 pub enum ErrorType {
     #[error(transparent)]
-    Lox(#[from] LoxError),
+    Scan(#[from] ScanError),
+    #[error(transparent)]
+    Parse(#[from] ParseError),
+    #[error(transparent)]
+    Runtime(#[from] RuntimeError),
     #[error(transparent)]
     System(#[from] SystemError),
     #[error(transparent)]
@@ -22,31 +26,73 @@ pub enum ErrorType {
 }
 
 #[derive(ThisError, Debug, PartialEq, Eq)]
-pub enum LoxError {
+pub enum ScanError {
     #[error("Unexpected character.")]
     UnexpectedChar(usize),
     #[error("Unterminated string.")]
     UnterminatedString(usize),
-    #[error("{1}")]
-    CustomError(usize, String),
-    #[error("Unknown Type.")]
-    UnknownType(usize),
 }
 
-impl LoxError {
-    fn val(&self) -> usize {
+impl ScanError {
+    fn line(&self) -> usize {
         match self {
-            LoxError::UnexpectedChar(val)
-            | LoxError::UnknownType(val)
-            | LoxError::UnterminatedString(val) => *val,
-            LoxError::CustomError(val, _) => *val,
+            ScanError::UnexpectedChar(line) | ScanError::UnterminatedString(line) => *line,
         }
     }
 }
 
-impl ErrorMsg for LoxError {
+impl ErrorMsg for ScanError {
     fn get_msg(&self) -> String {
-        format!("LOX | [line {}] {}", self.val(), self.to_string())
+        format!("SCAN | [line {}] {}", self.line(), self.to_string())
+    }
+}
+
+#[derive(ThisError, Debug, PartialEq, Eq)]
+pub enum ParseError {
+    #[error("Empty input.")]
+    EmptyInput,
+    #[error("Unknown token type.")]
+    UnknownTokenType(usize),
+    #[error("Expect '{0}'.")]
+    ExpectedToken(String, usize),
+}
+
+impl ParseError {
+    fn position(&self) -> Option<usize> {
+        match self {
+            ParseError::EmptyInput => None,
+            ParseError::UnknownTokenType(pos) | ParseError::ExpectedToken(_, pos) => Some(*pos),
+        }
+    }
+}
+
+impl ErrorMsg for ParseError {
+    fn get_msg(&self) -> String {
+        if let Some(pos) = self.position() {
+            format!("PARSE | [token {}] {}", pos, self.to_string())
+        } else {
+            format!("PARSE | {}", self.to_string())
+        }
+    }
+}
+
+// ===== Runtime Errors =====
+#[derive(ThisError, Debug, PartialEq)]
+pub enum RuntimeError {
+    #[error("Operand must be a number.")]
+    OperandMustBeNumber,
+    #[allow(dead_code)]
+    #[error("Operands must be two numbers or two strings.")]
+    InvalidOperandTypes,
+    #[error("Division by zero.")]
+    DivisionByZero,
+    #[error("Cannot apply operator '{0}' to the given operands.")]
+    InvalidOperation(String),
+}
+
+impl ErrorMsg for RuntimeError {
+    fn get_msg(&self) -> String {
+        format!("RUNTIME | {}", self.to_string())
     }
 }
 
@@ -80,10 +126,27 @@ impl ErrorMsg for CLIError {
     }
 }
 
-impl From<LoxError> for Error {
-    fn from(error: LoxError) -> Self {
+// ===== From implementations =====
+impl From<ScanError> for Error {
+    fn from(error: ScanError) -> Self {
         Error {
-            error_type: ErrorType::Lox(error),
+            error_type: ErrorType::Scan(error),
+        }
+    }
+}
+
+impl From<ParseError> for Error {
+    fn from(error: ParseError) -> Self {
+        Error {
+            error_type: ErrorType::Parse(error),
+        }
+    }
+}
+
+impl From<RuntimeError> for Error {
+    fn from(error: RuntimeError) -> Self {
+        Error {
+            error_type: ErrorType::Runtime(error),
         }
     }
 }
@@ -106,7 +169,13 @@ impl From<CLIError> for Error {
 impl Error {
     pub fn report(self) {
         match self.error_type {
-            ErrorType::Lox(err) => {
+            ErrorType::Scan(err) => {
+                Alert::error(err.get_msg()).show();
+            }
+            ErrorType::Parse(err) => {
+                Alert::error(err.get_msg()).show();
+            }
+            ErrorType::Runtime(err) => {
                 Alert::error(err.get_msg()).show();
             }
             ErrorType::System(err) => {
@@ -120,7 +189,13 @@ impl Error {
 
     pub fn report_and_exit(self, code: i32) -> ! {
         match self.error_type {
-            ErrorType::Lox(err) => {
+            ErrorType::Scan(err) => {
+                Alert::error(err.get_msg()).show_and_exit(code);
+            }
+            ErrorType::Parse(err) => {
+                Alert::error(err.get_msg()).show_and_exit(code);
+            }
+            ErrorType::Runtime(err) => {
                 Alert::error(err.get_msg()).show_and_exit(code);
             }
             ErrorType::System(err) => {
