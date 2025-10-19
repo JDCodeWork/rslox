@@ -98,23 +98,28 @@ impl Parser {
     }
 
     fn primary(&mut self) -> Result<Expr, LoxError> {
-        let expression = match self.peek().get_type() {
+        let token_type = self.peek().get_type().clone();
+
+        let expression = match token_type {
             False => {
                 self.advance();
-                Expr::Literal(Literal::new("false".to_string()))
+                Expr::Literal(Literal::Boolean(false))
             }
             True => {
                 self.advance();
-                Expr::Literal(Literal::new("true".to_string()))
+                Expr::Literal(Literal::Boolean(true))
             }
             Nil => {
                 self.advance();
-                Expr::Literal(Literal::new("null".to_string()))
+                Expr::Literal(Literal::Nil)
             }
-            Number(_) | String(_) => {
-                let lit = self.peek().get_literal_as_string().unwrap_or_default();
+            Number(num) => {
                 self.advance();
-                Expr::Literal(Literal::new(lit))
+                Expr::Literal(Literal::Number(num))
+            }
+            String(str) => {
+                self.advance();
+                Expr::Literal(Literal::String(str))
             }
             LeftParen => {
                 self.advance();
@@ -187,6 +192,7 @@ impl Parser {
         Err(LoxError::CustomError(self.current, error.to_string()))
     }
 
+    #[allow(dead_code)]
     fn synchronize(&mut self) {
         self.advance();
 

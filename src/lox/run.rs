@@ -2,8 +2,9 @@ use std::{collections::BTreeMap, fs, io};
 
 use crate::{
     cli::alerts::Alert,
-    errors::{Error, SystemError},
+    errors::{Error, LoxError, SystemError},
     lox::{
+        interpreter::Interpreter,
         scanner::Scanner,
         token::{Token, TokenType},
     },
@@ -115,10 +116,20 @@ fn read_prompt() -> String {
 fn run(tokens: Vec<Token>) -> Result<(), Error> {
     let mut parser = Parser::new(tokens);
 
-    match parser.parse() {
-        Ok(..) => Ok(()),
-        Err(lox_error) => Error::from(lox_error).report_and_exit(1),
-    }
+    let expr = match parser.parse() {
+        Ok(expr) => expr,
+        Err(lox_err) => Error::from(lox_err).report_and_exit(1),
+    };
+
+    let result = match Interpreter::evaluate(expr) {
+        Ok(lit) => lit,
+        Err(_) => Error::from(LoxError::CustomError(0, "Runtime exception".to_string()))
+            .report_and_exit(1),
+    };
+
+    println!("{:?}", result);
+
+    Ok(())
 }
 
 fn debug_show_tokens(tokens: Vec<Token>) {

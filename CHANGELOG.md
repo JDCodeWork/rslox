@@ -10,7 +10,13 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com).
 
 ### Added
 
+- Parser implementation with expression support
+- Interpreter with evaluation system
 - Simple panic mode for errors
+
+### Changed
+
+- Refactored `Literal` from struct to enum with typed variants
 
 ## [0.5.1] - 2025-09-13
 

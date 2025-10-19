@@ -1,4 +1,5 @@
 pub mod expr;
+mod interpreter;
 mod parser;
 mod run;
 mod scanner;

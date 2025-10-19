@@ -2,7 +2,7 @@ use crate::tools::AstPrinter;
 
 use super::token::Token;
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Debug)]
 pub enum Expr {
     Binary(Binary),
     Grouping(Grouping),
@@ -23,13 +23,12 @@ impl Expr {
                 AstPrinter::parenthesize(&operator.get_lexeme(), vec![left, right])
             }
             Expr::Grouping(group) => AstPrinter::parenthesize("group", vec![group.expression]),
-            Expr::Literal(literal) => {
-                if literal.value == "null" {
-                    return "nill".to_string();
-                }
-
-                literal.value.to_string()
-            }
+            Expr::Literal(val) => match val {
+                Literal::Nil => "nil".to_string(),
+                Literal::Boolean(bool) => bool.to_string(),
+                Literal::Number(num) => num.to_string(),
+                Literal::String(str) => str.to_string(),
+            },
             Expr::Unary(unary) => {
                 let Unary { operator, right } = unary;
 
@@ -39,27 +38,30 @@ impl Expr {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub struct Binary {
-    left: Box<Expr>,
-    operator: Token,
-    right: Box<Expr>,
+    pub left: Box<Expr>,
+    pub operator: Token,
+    pub right: Box<Expr>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub struct Grouping {
-    expression: Box<Expr>,
+    pub expression: Box<Expr>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct Literal {
-    value: String,
+#[derive(Debug, Clone, PartialEq)]
+pub enum Literal {
+    Nil,
+    Boolean(bool),
+    Number(f64),
+    String(String),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 pub struct Unary {
-    operator: Token,
-    right: Box<Expr>,
+    pub operator: Token,
+    pub right: Box<Expr>,
 }
 
 impl Binary {
@@ -77,12 +79,6 @@ impl Grouping {
         Self {
             expression: Box::new(expression),
         }
-    }
-}
-
-impl Literal {
-    pub fn new(value: String) -> Self {
-        Self { value }
     }
 }
 
