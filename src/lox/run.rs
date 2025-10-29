@@ -123,7 +123,7 @@ fn run(tokens: Vec<Token>) -> Result<(), Error> {
 
     let result = match Interpreter::evaluate(expr) {
         Ok(lit) => lit,
-        Err(runtime_err) => Error::from(runtime_err).report_and_exit(70),
+        Err(runtime_err) => return Err(runtime_err),
     };
 
     println!("{:?}", result);

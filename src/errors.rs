@@ -1,6 +1,12 @@
 use thiserror::Error as ThisError;
 
-use crate::cli::alerts::Alert;
+use crate::{cli::alerts::Alert, lox::token::Token};
+
+mod working_on {
+    pub enum Err {}
+
+
+}
 
 #[derive(Debug)]
 pub struct Error {
