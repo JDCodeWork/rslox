@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::errors::{Error, ScanError};
+use crate::errors::ScanErr;
 
 use super::token::{Token, TokenType};
 
@@ -133,7 +133,7 @@ impl Scanner {
                     }
 
                     if self.is_at_end() {
-                        Error::from(ScanError::UnterminatedString(self.line)).report();
+                        ScanErr::UnterminatedString(self.line).to_err().report();
                         return;
                     }
 
@@ -150,8 +150,8 @@ impl Scanner {
             '"' => self.string(),
             ch if ch.is_ascii_digit() => self.number(),
             ch if ch.is_ascii_alphabetic() || ch == '_' => self.identifier(),
-            _ => {
-                Error::from(ScanError::UnexpectedChar(self.line)).report();
+            ch => {
+                ScanErr::UnexpectedChar(ch, self.line).to_err().report();
             }
         };
     }
@@ -218,7 +218,7 @@ impl Scanner {
         }
 
         if self.is_at_end() {
-            Error::from(ScanError::UnterminatedString(self.line)).report();
+            ScanErr::UnterminatedString(self.line).to_err().report();
             return;
         }
 

@@ -1,81 +1,74 @@
 use thiserror::Error as ThisError;
 
-use crate::{cli::alerts::Alert, lox::token::Token};
-
-mod working_on {
-    pub enum Err {}
-
-
-}
-
-#[derive(Debug)]
-pub struct Error {
-    error_type: ErrorType,
-}
+use crate::cli::alerts::Alert;
 
 trait ErrorMsg {
     fn get_msg(&self) -> String;
 }
 
 #[derive(ThisError, Debug)]
-pub enum ErrorType {
+pub enum Err {
     #[error(transparent)]
-    Scan(#[from] ScanError),
+    Scan(#[from] ScanErr),
     #[error(transparent)]
-    Parse(#[from] ParseError),
+    Parse(#[from] ParseErr),
     #[error(transparent)]
-    Runtime(#[from] RuntimeError),
+    Runtime(#[from] RuntimeErr),
     #[error(transparent)]
-    System(#[from] SystemError),
-    #[error(transparent)]
-    CLI(#[from] CLIError),
+    Io(#[from] IoErr),
 }
 
-#[derive(ThisError, Debug, PartialEq, Eq)]
-pub enum ScanError {
-    #[error("Unexpected character.")]
-    UnexpectedChar(usize),
+#[derive(ThisError, Debug, PartialEq)]
+pub enum ScanErr {
+    #[error("Unexpected character '{0}'.")]
+    UnexpectedChar(char, usize),
     #[error("Unterminated string.")]
     UnterminatedString(usize),
 }
 
-impl ScanError {
-    fn line(&self) -> usize {
+impl ScanErr {
+    fn ln(&self) -> usize {
         match self {
-            ScanError::UnexpectedChar(line) | ScanError::UnterminatedString(line) => *line,
+            ScanErr::UnexpectedChar(_, line) | ScanErr::UnterminatedString(line) => *line,
         }
     }
-}
 
-impl ErrorMsg for ScanError {
-    fn get_msg(&self) -> String {
-        format!("SCAN | [line {}] {}", self.line(), self.to_string())
+    pub fn to_err(self) -> Err {
+        Err::Scan(self)
     }
 }
 
-#[derive(ThisError, Debug, PartialEq, Eq)]
-pub enum ParseError {
-    #[error("Empty input.")]
-    EmptyInput,
-    #[error("Unknown token type.")]
-    UnknownTokenType(usize),
+impl ErrorMsg for ScanErr {
+    fn get_msg(&self) -> String {
+        format!("SCAN | [line {}] {}", self.ln(), self.to_string())
+    }
+}
+
+#[derive(ThisError, Debug, PartialEq)]
+pub enum ParseErr {
     #[error("Expect '{0}'.")]
     ExpectedToken(String, usize),
+    #[error("Unexpected end of input.")]
+    UnexpectedEOF(usize),
 }
 
-impl ParseError {
-    fn position(&self) -> Option<usize> {
+impl ParseErr {
+    fn ln(&self) -> Option<usize> {
         match self {
-            ParseError::EmptyInput => None,
-            ParseError::UnknownTokenType(pos) | ParseError::ExpectedToken(_, pos) => Some(*pos),
+            ParseErr::ExpectedToken(_, ln) => Some(*ln),
+            ParseErr::UnexpectedEOF(ln) => Some(*ln),
         }
+    }
+
+    pub fn to_err(self) -> Err {
+        Err::Parse(self)
     }
 }
 
-impl ErrorMsg for ParseError {
+impl ErrorMsg for ParseErr {
     fn get_msg(&self) -> String {
-        if let Some(pos) = self.position() {
-            format!("PARSE | [token {}] {}", pos, self.to_string())
+        if let Some(ln) = self.ln() {
+            format!("PARSE | [line {}] {}", ln, self.to_string())
         } else {
             format!("PARSE | {}", self.to_string())
         }
@@ -84,130 +77,84 @@ impl ErrorMsg for ParseError {
 
 // ===== Runtime Errors =====
 #[derive(ThisError, Debug, PartialEq)]
-pub enum RuntimeError {
+pub enum RuntimeErr {
     #[error("Operand must be a number.")]
     OperandMustBeNumber,
-    #[allow(dead_code)]
     #[error("Operands must be two numbers or two strings.")]
     InvalidOperandTypes,
     #[error("Division by zero.")]
     DivisionByZero,
-    #[error("Cannot apply operator '{0}' to the given operands.")]
-    InvalidOperation(String),
 }
 
-impl ErrorMsg for RuntimeError {
+impl RuntimeErr {
+    pub fn to_err(self) -> Err {
+        Err::Runtime(self)
+    }
+}
+
+impl ErrorMsg for RuntimeErr {
     fn get_msg(&self) -> String {
         format!("RUNTIME | {}", self.to_string())
     }
 }
 
 #[derive(ThisError, Debug)]
-pub enum SystemError {
+pub enum IoErr {
     #[error(transparent)]
-    Io(#[from] std::io::Error),
+    Sys(#[from] std::io::Error),
     #[error("File not found in path: '{0}'")]
     FileNotFound(String),
-    #[error("Filed to create file in path: '{0}'")]
-    FiledToCreateFile(String),
+    #[error("Failed to create file in path: '{0}'")]
+    FailedToCreateFile(String),
     #[error("Invalid file extension, expected '.lox' extension")]
     InvalidFileExtension,
+    #[error("Syntax invalid in AST tool")]
+    ASTSyntaxInvalid,
 }
 
-impl ErrorMsg for SystemError {
+impl ErrorMsg for IoErr {
     fn get_msg(&self) -> String {
         format!("SYS | {}", self.to_string())
     }
 }
 
-#[derive(ThisError, Debug)]
-pub enum CLIError {
-    #[error("Syntax invalid in AST tool")]
-    ASTSyntaxInvalid,
-}
-
-impl ErrorMsg for CLIError {
-    fn get_msg(&self) -> String {
-        format!("CLI | {}", self.to_string())
+impl IoErr {
+    pub fn to_err(self) -> Err {
+        Err::Io(self)
     }
 }
 
 // ===== From implementations =====
-impl From<ScanError> for Error {
-    fn from(error: ScanError) -> Self {
-        Error {
-            error_type: ErrorType::Scan(error),
-        }
-    }
-}
-
-impl From<ParseError> for Error {
-    fn from(error: ParseError) -> Self {
-        Error {
-            error_type: ErrorType::Parse(error),
-        }
-    }
-}
-
-impl From<RuntimeError> for Error {
-    fn from(error: RuntimeError) -> Self {
-        Error {
-            error_type: ErrorType::Runtime(error),
-        }
-    }
-}
-
-impl From<SystemError> for Error {
-    fn from(error: SystemError) -> Self {
-        Error {
-            error_type: ErrorType::System(error),
-        }
-    }
-}
-
-impl From<CLIError> for Error {
-    fn from(error: CLIError) -> Self {
-        Error {
-            error_type: ErrorType::CLI(error),
-        }
-    }
-}
-impl Error {
+impl Err {
     pub fn report(self) {
-        match self.error_type {
-            ErrorType::Scan(err) => {
+        match self {
+            Err::Scan(err) => {
                 Alert::error(err.get_msg()).show();
             }
-            ErrorType::Parse(err) => {
+            Err::Parse(err) => {
                 Alert::error(err.get_msg()).show();
             }
-            ErrorType::Runtime(err) => {
+            Err::Runtime(err) => {
                 Alert::error(err.get_msg()).show();
             }
-            ErrorType::System(err) => {
-                Alert::error(err.get_msg()).show();
-            }
-            ErrorType::CLI(err) => {
+            Err::Io(err) => {
                 Alert::error(err.get_msg()).show();
             }
         };
     }
 
     pub fn report_and_exit(self, code: i32) -> ! {
-        match self.error_type {
-            ErrorType::Scan(err) => {
+        match self {
+            Err::Scan(err) => {
                 Alert::error(err.get_msg()).show_and_exit(code);
             }
-            ErrorType::Parse(err) => {
+            Err::Parse(err) => {
                 Alert::error(err.get_msg()).show_and_exit(code);
             }
-            ErrorType::Runtime(err) => {
+            Err::Runtime(err) => {
                 Alert::error(err.get_msg()).show_and_exit(code);
             }
-            ErrorType::System(err) => {
-                Alert::error(err.get_msg()).show_and_exit(code);
-            }
-            ErrorType::CLI(err) => {
+            Err::Io(err) => {
                 Alert::error(err.get_msg()).show_and_exit(code);
             }
         };

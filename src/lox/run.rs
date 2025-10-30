@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, fs, io};
 
 use crate::{
     cli::alerts::Alert,
-    errors::{Error, SystemError},
+    errors::{Err, IoErr},
     lox::{
         interpreter::Interpreter,
         scanner::Scanner,
@@ -75,14 +75,16 @@ fn handle_path_format(path: &str) -> String {
     if path.ends_with(".lox") {
         path.to_string()
     } else {
-        Error::from(SystemError::InvalidFileExtension).report_and_exit(1);
+        IoErr::InvalidFileExtension.to_err().report_and_exit(1);
     }
 }
 
 fn read_file(path: &str) -> String {
     match fs::read_to_string(path) {
         Ok(val) => val,
-        Err(..) => Error::from(SystemError::FileNotFound(path.to_string())).report_and_exit(1),
+        Err(..) => IoErr::FileNotFound(path.to_string())
+            .to_err()
+            .report_and_exit(1),
     }
 }
 
@@ -96,11 +98,11 @@ fn read_prompt() -> String {
 
         // Force the buffer to be send to the console
         if let Err(e) = io::Write::flush(&mut io::stdout()) {
-            Error::from(SystemError::Io(e)).report();
+            IoErr::Sys(e).to_err().report();
         }
 
         if let Err(e) = io::stdin().read_line(&mut line) {
-            Error::from(SystemError::Io(e)).report();
+            IoErr::Sys(e).to_err().report();
         }
         if line.trim().is_empty() {
             print!("\n");
@@ -113,12 +115,17 @@ fn read_prompt() -> String {
     source
 }
 
-fn run(tokens: Vec<Token>) -> Result<(), Error> {
+fn run(tokens: Vec<Token>) -> Result<(), Err> {
     let mut parser = Parser::new(tokens);
 
     let expr = match parser.parse() {
         Ok(expr) => expr,
-        Err(lox_err) => Error::from(lox_err).report_and_exit(1),
+        Err(lox_err) => {
+            // Report parse error and attempt to recover so REPL can continue
+            lox_err.report();
+            parser.synchronize();
+            return Ok(());
+        }
     };
 
     let result = match Interpreter::evaluate(expr) {
@@ -161,7 +168,10 @@ fn debug_show_ast(tokens: Vec<Token>) {
                 Alert::info(format!("AST (line {line}) -> {}", AstPrinter::print(expr))).show();
             }
             Err(lox_error) => {
-                Error::from(lox_error).report_and_exit(1);
+                // Report and continue to next line instead of exiting
+                lox_error.report();
+                parser.synchronize();
+                continue;
             }
         }
     }

@@ -1,4 +1,4 @@
-use crate::errors::ParseError;
+use crate::errors::{Err, ParseErr};
 
 use super::{
     expr::{Binary, Expr, Grouping, Literal, Unary},
@@ -20,21 +20,15 @@ impl Parser {
 }
 
 impl Parser {
-    pub fn parse(&mut self) -> Result<Expr, ParseError> {
-        if self.tokens.is_empty()
-            || (self.tokens.len() == 1 && *self.tokens[0].get_type() == TokenType::EOF)
-        {
-            return Err(ParseError::EmptyInput);
-        } else {
-            self.expression()
-        }
+    pub fn parse(&mut self) -> Result<Expr, Err> {
+        self.expression()
     }
 
-    fn expression(&mut self) -> Result<Expr, ParseError> {
+    fn expression(&mut self) -> Result<Expr, Err> {
         self.equality()
     }
 
-    fn equality(&mut self) -> Result<Expr, ParseError> {
+    fn equality(&mut self) -> Result<Expr, Err> {
         let mut expression = self.comparison()?;
 
         while self.match_token(&[BangEqual, EqualEqual]) {
@@ -47,7 +41,7 @@ impl Parser {
         Ok(expression)
     }
 
-    fn comparison(&mut self) -> Result<Expr, ParseError> {
+    fn comparison(&mut self) -> Result<Expr, Err> {
         let mut expression = self.term()?;
 
         while self.match_token(&[Greater, GreaterEqual, Less, LessEqual]) {
@@ -60,7 +54,7 @@ impl Parser {
         Ok(expression)
     }
 
-    fn term(&mut self) -> Result<Expr, ParseError> {
+    fn term(&mut self) -> Result<Expr, Err> {
         let mut expression = self.factor()?;
 
         while self.match_token(&[Minus, Plus]) {
@@ -73,7 +67,7 @@ impl Parser {
         Ok(expression)
     }
 
-    fn factor(&mut self) -> Result<Expr, ParseError> {
+    fn factor(&mut self) -> Result<Expr, Err> {
         let mut expression = self.unary()?;
 
         while self.match_token(&[Star, Slash]) {
@@ -86,7 +80,7 @@ impl Parser {
         Ok(expression)
     }
 
-    fn unary(&mut self) -> Result<Expr, ParseError> {
+    fn unary(&mut self) -> Result<Expr, Err> {
         if self.match_token(&[Bang, Minus]) {
             let operator = self.previous().clone();
             let right = self.unary()?;
@@ -97,7 +91,7 @@ impl Parser {
         }
     }
 
-    fn primary(&mut self) -> Result<Expr, ParseError> {
+    fn primary(&mut self) -> Result<Expr, Err> {
         let token_type = self.peek().get_type().clone();
 
         let expression = match token_type {
@@ -129,7 +123,7 @@ impl Parser {
 
                 Expr::Grouping(Grouping::new(expr))
             }
-            _ => return Err(ParseError::UnknownTokenType(self.current)),
+            _ => return Err(ParseErr::UnexpectedEOF(self.current).to_err()),
         };
         Ok(expression)
     }
@@ -183,17 +177,16 @@ impl Parser {
         *self.peek().get_type() == EOF
     }
 
-    fn consume(&mut self, token_type: TokenType, error: &str) -> Result<(), ParseError> {
+    fn consume(&mut self, token_type: TokenType, error: &str) -> Result<(), Err> {
         if self.check(&token_type) {
             self.advance();
             return Ok(());
         };
 
-        Err(ParseError::ExpectedToken(error.to_string(), self.current))
+        Err(ParseErr::ExpectedToken(error.to_string(), self.current).to_err())
     }
 
-    #[allow(dead_code)]
-    fn synchronize(&mut self) {
+    pub fn synchronize(&mut self) {
         self.advance();
 
         while !self.is_at_end() {

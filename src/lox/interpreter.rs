@@ -1,4 +1,4 @@
-use crate::errors::{Error, RuntimeError};
+use crate::errors::{Err, RuntimeErr};
 use crate::lox::expr::Binary;
 use crate::lox::expr::{Expr, Grouping, Literal, Unary};
 use crate::lox::token::*;
@@ -6,11 +6,11 @@ use crate::lox::token::*;
 pub struct Interpreter;
 
 impl Interpreter {
-    fn grouping_expr(group: Grouping) -> Result<Literal, Error> {
+    fn grouping_expr(group: Grouping) -> Result<Literal, Err> {
         Interpreter::evaluate(*group.expression)
     }
 
-    fn binary_expr(binary: Binary) -> Result<Literal, Error> {
+    fn binary_expr(binary: Binary) -> Result<Literal, Err> {
         let left_expr = Interpreter::evaluate(*binary.left)?;
         let right_expr = Interpreter::evaluate(*binary.right)?;
 
@@ -27,25 +27,25 @@ impl Interpreter {
                 (Literal::Number(left_num), Literal::Number(right_num)) => {
                     return Ok(Literal::Number(left_num + right_num))
                 }
-                _ => return Err(Error::from(RuntimeError::InvalidOperandTypes)),
+                _ => return Err(RuntimeErr::InvalidOperandTypes.to_err()),
             }
         }
 
         let left_num = match left_expr {
             Literal::Number(num) => num,
-            _ => return Err(Error::from(RuntimeError::OperandMustBeNumber)),
+            _ => return Err(Err::from(RuntimeErr::OperandMustBeNumber)),
         };
 
         let right_num = match right_expr {
             Literal::Number(num) => num,
-            _ => return Err(Error::from(RuntimeError::OperandMustBeNumber)),
+            _ => return Err(Err::from(RuntimeErr::OperandMustBeNumber)),
         };
 
         match *binary.operator.get_type() {
             TokenType::Minus => Ok(Literal::Number(left_num - right_num)),
             TokenType::Slash => {
                 if right_num == 0.0 {
-                    return Err(Error::from(RuntimeError::DivisionByZero));
+                    return Err(RuntimeErr::DivisionByZero.to_err());
                 }
                 Ok(Literal::Number(left_num / right_num))
             }
@@ -66,12 +66,12 @@ impl Interpreter {
         }
     }
 
-    fn unary_expr(unary: Unary) -> Result<Literal, Error> {
+    fn unary_expr(unary: Unary) -> Result<Literal, Err> {
         let right = Interpreter::evaluate(*unary.right)?;
 
         match (unary.operator.get_type(), right) {
             (TokenType::Minus, Literal::Number(num)) => Ok(Literal::Number(-num)),
-            (TokenType::Minus, _) => Err(Error::from(RuntimeError::OperandMustBeNumber)),
+            (TokenType::Minus, _) => Err(Err::from(RuntimeErr::OperandMustBeNumber)),
             (TokenType::Bang, lit) => {
                 let bool_val = Interpreter::is_truthy(lit)?;
                 Ok(Literal::Boolean(!bool_val))
@@ -80,11 +80,11 @@ impl Interpreter {
         }
     }
 
-    fn literal_expr(lit: Literal) -> Result<Literal, Error> {
+    fn literal_expr(lit: Literal) -> Result<Literal, Err> {
         Ok(lit)
     }
 
-    fn is_truthy(lit: Literal) -> Result<bool, Error> {
+    fn is_truthy(lit: Literal) -> Result<bool, Err> {
         match lit {
             Literal::Boolean(value) => Ok(value),
             Literal::Number(value) => Ok(value != 0.0),
@@ -93,7 +93,7 @@ impl Interpreter {
         }
     }
 
-    fn is_equal(left_lit: Literal, right_lit: Literal) -> Result<bool, Error> {
+    fn is_equal(left_lit: Literal, right_lit: Literal) -> Result<bool, Err> {
         match (&left_lit, &right_lit) {
             (Literal::Nil, Literal::Nil) => Ok(true),
             (Literal::Nil, _) => Ok(false),
@@ -102,7 +102,7 @@ impl Interpreter {
         }
     }
 
-    pub fn evaluate(expr: Expr) -> Result<Literal, Error> {
+    pub fn evaluate(expr: Expr) -> Result<Literal, Err> {
         match expr {
             Expr::Binary(binary) => Interpreter::binary_expr(binary),
             Expr::Grouping(group) => Interpreter::grouping_expr(group),
@@ -115,16 +115,16 @@ impl Interpreter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::errors::Error;
+    use crate::errors::Err;
     use crate::lox::parser::Parser;
     use crate::lox::scanner::Scanner;
 
-    fn eval_src(src: &str) -> Result<Literal, Error> {
+    fn eval_src(src: &str) -> Result<Literal, Err> {
         let mut scanner = Scanner::new(src.to_string());
         let tokens = scanner.scan_tokens().clone();
         let mut parser = Parser::new(tokens);
 
-        let expr = parser.parse().map_err(Error::from)?;
+        let expr = parser.parse().map_err(Err::from)?;
         Interpreter::evaluate(expr)
     }
 
