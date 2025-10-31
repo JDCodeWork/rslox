@@ -5,8 +5,9 @@ This project adheres to [Semantic Versioning](https://semver.org).
 The format is inspired by [Keep a Changelog](https://keepachangelog.com).
 
 ---
-
 ## [Unreleased]
+
+## [0.6.0] - 2025-10-30
 
 ### Added
 
@@ -19,11 +20,10 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com).
 
 - Refactored `Literal` from struct to enum with typed variants
 - Refactored error system with separated error types:
-  - `ScanError` for lexical analysis errors
-  - `ParseError` for syntax errors
-  - `RuntimeError` for execution errors
-  - `SystemError` for file and IO errors
-  - `CLIError` for CLI-related errors
+  - `ScanErr` for lexical analysis errors
+  - `ParseErr` for syntax errors
+  - `RuntimeErr` for execution errors
+  - `SystemErr` for file and IO errors
 
 ## [0.5.1] - 2025-09-13
 

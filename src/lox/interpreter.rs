@@ -38,6 +38,7 @@ impl Interpreter {
 
         let right_num = match right_expr {
             Literal::Number(num) => num,
+            Literal::String(ref str) => str.len() as f64,
             _ => return Err(Err::from(RuntimeErr::OperandMustBeNumber)),
         };
 
