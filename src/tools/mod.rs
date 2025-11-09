@@ -2,14 +2,14 @@ use std::{fs::File, io::Write};
 
 use crate::{
     errors::{Err, IoErr},
-    lox::expr::Expr,
+    lox::ast::{Expr, Stmt},
 };
 
 pub struct AstPrinter;
 
 impl AstPrinter {
-    pub fn print(expr: Expr) -> String {
-        expr.print()
+    pub fn print(stmt: Stmt) -> String {
+        stmt.print()
     }
 
     pub fn parenthesize(name: &str, exprs: Vec<Box<Expr>>) -> String {

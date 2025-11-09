@@ -1,11 +1,31 @@
 use crate::errors::{Err, RuntimeErr};
-use crate::lox::expr::Binary;
-use crate::lox::expr::{Expr, Grouping, Literal, Unary};
+use crate::lox::ast::{Binary, Expr, Grouping, Literal, Stmt, Unary};
 use crate::lox::token::*;
 
 pub struct Interpreter;
 
 impl Interpreter {
+    pub fn interpret(stmts: Vec<Stmt>) -> Result<(), Err> {
+        for stmt in stmts {
+            Self::execute(stmt)?;
+        }
+
+        Ok(())
+    }
+
+    fn expr_stamtent(expr: Expr) -> Result<(), Err> {
+        Self::evaluate(expr)?;
+
+        Ok(())
+    }
+
+    fn print_stament(expr: Expr) -> Result<(), Err> {
+        let val = Self::evaluate(expr)?;
+        println!("{}", Expr::from(val).print());
+
+        Ok(())
+    }
+
     fn grouping_expr(group: Grouping) -> Result<Literal, Err> {
         Interpreter::evaluate(*group.expression)
     }
@@ -103,12 +123,19 @@ impl Interpreter {
         }
     }
 
-    pub fn evaluate(expr: Expr) -> Result<Literal, Err> {
+    fn evaluate(expr: Expr) -> Result<Literal, Err> {
         match expr {
             Expr::Binary(binary) => Interpreter::binary_expr(binary),
             Expr::Grouping(group) => Interpreter::grouping_expr(group),
             Expr::Literal(literal) => Interpreter::literal_expr(literal),
             Expr::Unary(unary) => Interpreter::unary_expr(unary),
+        }
+    }
+
+    fn execute(stmt: Stmt) -> Result<(), Err> {
+        match stmt {
+            Stmt::Expression(expr) => Self::expr_stamtent(expr),
+            Stmt::Print(val) => Self::print_stament(val),
         }
     }
 }
@@ -120,24 +147,41 @@ mod tests {
     use crate::lox::parser::Parser;
     use crate::lox::scanner::Scanner;
 
-    fn eval_src(src: &str) -> Result<Literal, Err> {
+    fn eval_expr(src: &str) -> Result<Literal, Err> {
         let mut scanner = Scanner::new(src.to_string());
         let tokens = scanner.scan_tokens().clone();
         let mut parser = Parser::new(tokens);
 
-        let expr = parser.parse().map_err(Err::from)?;
-        Interpreter::evaluate(expr)
+        let stmts = parser.parse().map_err(Err::from)?;
+
+        if let Some(stmt) = stmts.first() {
+            match stmt {
+                Stmt::Expression(expr) => Interpreter::evaluate(expr.clone()),
+                Stmt::Print(expr) => Interpreter::evaluate(expr.clone()),
+            }
+        } else {
+            Err(Err::from(RuntimeErr::InvalidOperandTypes))
+        }
+    }
+
+    fn run_src(src: &str) -> Result<(), Err> {
+        let mut scanner = Scanner::new(src.to_string());
+        let tokens = scanner.scan_tokens().clone();
+        let mut parser = Parser::new(tokens);
+
+        let stmts = parser.parse().map_err(Err::from)?;
+        Interpreter::interpret(stmts)
     }
 
     #[test]
     fn test_interpreter_arithmetic() {
-        let res = eval_src("1 + 2 * 3").expect("evaluation failed");
+        let res = eval_expr("1 + 2 * 3;").expect("evaluation failed");
         assert_eq!(res, Literal::Number(7.0));
     }
 
     #[test]
     fn test_division_by_zero_returns_runtime_error() {
-        let res = eval_src("10 / 0");
+        let res = eval_expr("10 / 0;");
         assert!(res.is_err(), "Expected an error for division by zero");
         let err = res.unwrap_err();
         let dbg = format!("{:?}", err);
@@ -149,7 +193,7 @@ mod tests {
 
     #[test]
     fn test_unary_operand_type_error() {
-        let res = eval_src("-\"hello\"");
+        let res = eval_expr("-\"hello\";");
         assert!(res.is_err(), "Expected an error for negating a string");
         let err = res.unwrap_err();
         let dbg = format!("{:?}", err);
@@ -157,6 +201,21 @@ mod tests {
             dbg.contains("Operand")
                 || dbg.contains("OperandMustBeNumber")
                 || dbg.contains("RUNTIME")
+        );
+    }
+
+    #[test]
+    fn test_print_statement() {
+        let res = run_src("print \"Hello, World!\";");
+        assert!(res.is_ok(), "Print statement should execute successfully");
+    }
+
+    #[test]
+    fn test_expression_statement() {
+        let res = run_src("1 + 2;");
+        assert!(
+            res.is_ok(),
+            "Expression statement should execute successfully"
         );
     }
 }

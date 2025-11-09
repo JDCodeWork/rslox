@@ -68,7 +68,9 @@ pub fn handle_run_command(path: Option<String>, opts: RunOptsCommand) {
         debug_show_tokens(tokens.clone());
     }
 
-    run(tokens.clone()).unwrap();
+    if let Err(lang_err) = run(tokens.clone()) {
+        lang_err.report_and_exit(1)
+    }
 }
 
 fn handle_path_format(path: &str) -> String {
@@ -118,7 +120,7 @@ fn read_prompt() -> String {
 fn run(tokens: Vec<Token>) -> Result<(), Err> {
     let mut parser = Parser::new(tokens);
 
-    let expr = match parser.parse() {
+    let statements = match parser.parse() {
         Ok(expr) => expr,
         Err(lox_err) => {
             // Report parse error and attempt to recover so REPL can continue
@@ -128,12 +130,10 @@ fn run(tokens: Vec<Token>) -> Result<(), Err> {
         }
     };
 
-    let result = match Interpreter::evaluate(expr) {
-        Ok(lit) => lit,
+    match Interpreter::interpret(statements) {
+        Ok(()) => (),
         Err(runtime_err) => return Err(runtime_err),
     };
-
-    println!("{:?}", result);
 
     Ok(())
 }
@@ -164,8 +164,10 @@ fn debug_show_ast(tokens: Vec<Token>) {
 
         let mut parser = Parser::new(line_tokens.clone());
         match parser.parse() {
-            Ok(expr) => {
-                Alert::info(format!("AST (line {line}) -> {}", AstPrinter::print(expr))).show();
+            Ok(stmts) => {
+                for stmt in stmts {
+                    Alert::info(format!("AST (line {line}) -> {}", AstPrinter::print(stmt))).show();
+                }
             }
             Err(lox_error) => {
                 // Report and continue to next line instead of exiting

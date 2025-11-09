@@ -2,12 +2,27 @@ use crate::tools::AstPrinter;
 
 use super::token::Token;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
+pub enum Stmt {
+    Expression(Expr),
+    Print(Expr),
+}
+
+#[derive(PartialEq, Debug, Clone)]
 pub enum Expr {
     Binary(Binary),
     Grouping(Grouping),
     Literal(Literal),
     Unary(Unary),
+}
+
+impl Stmt {
+    pub fn print(self) -> String {
+        match self {
+            Stmt::Expression(expr) => expr.print(),
+            Stmt::Print(expr) => format!("(print {})", expr.print()),
+        }
+    }
 }
 
 impl Expr {
@@ -37,15 +52,20 @@ impl Expr {
         }
     }
 }
+impl From<Literal> for Expr {
+    fn from(value: Literal) -> Self {
+        Self::Literal(value)
+    }
+}
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Binary {
     pub left: Box<Expr>,
     pub operator: Token,
     pub right: Box<Expr>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Grouping {
     pub expression: Box<Expr>,
 }
@@ -58,7 +78,7 @@ pub enum Literal {
     String(String),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Unary {
     pub operator: Token,
     pub right: Box<Expr>,

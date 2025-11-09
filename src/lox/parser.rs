@@ -1,7 +1,10 @@
-use crate::errors::{Err, ParseErr};
+use crate::{
+    errors::{Err, ParseErr},
+    lox::ast::Stmt,
+};
 
 use super::{
-    expr::{Binary, Expr, Grouping, Literal, Unary},
+    ast::{Binary, Expr, Grouping, Literal, Unary},
     token::{
         Token,
         TokenType::{self, *},
@@ -20,8 +23,37 @@ impl Parser {
 }
 
 impl Parser {
-    pub fn parse(&mut self) -> Result<Expr, Err> {
-        self.expression()
+    pub fn parse(&mut self) -> Result<Vec<Stmt>, Err> {
+        let mut staments = Vec::new();
+
+        while !self.is_at_end() {
+            staments.push(self.statment()?);
+        }
+
+        Ok(staments)
+    }
+
+    fn statment(&mut self) -> Result<Stmt, Err> {
+        match *self.peek().get_type() {
+            Print => self.print_stmt(),
+            _ => self.expr_stmt(),
+        }
+    }
+
+    fn print_stmt(&mut self) -> Result<Stmt, Err> {
+        self.advance(); // Consume 'Print' token
+
+        let val = self.expression()?;
+        self.consume(Semicolon, "Expected ';' after value.")?;
+
+        Ok(Stmt::Print(val))
+    }
+
+    fn expr_stmt(&mut self) -> Result<Stmt, Err> {
+        let expr = self.expression()?;
+        self.consume(Semicolon, "Expected ';' after expression.")?;
+
+        Ok(Stmt::Expression(expr))
     }
 
     fn expression(&mut self) -> Result<Expr, Err> {

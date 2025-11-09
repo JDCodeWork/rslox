@@ -5,7 +5,14 @@ This project adheres to [Semantic Versioning](https://semver.org).
 The format is inspired by [Keep a Changelog](https://keepachangelog.com).
 
 ---
+
 ## [Unreleased]
+
+### Added
+
+- Interpretation of `print` statement in the interpreter.
+- Added `Environment` to manage variables and their runtime resolution.
+- Support for blocks (`{ ... }`) with lexical scope, enabling local variables.
 
 ## [0.6.0] - 2025-10-30
 
