@@ -47,6 +47,11 @@ impl Scanner {
             line: 1,
         }
     }
+
+    pub fn scan_from(source: String) -> Vec<Token> {
+        let mut scanner = Scanner::new(source);
+        scanner.scan_tokens().clone()
+    }
 }
 
 impl Scanner {

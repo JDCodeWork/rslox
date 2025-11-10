@@ -51,8 +51,7 @@ pub fn handle_run_command(path: Option<String>, opts: RunOptsCommand) {
         }
     }
 
-    let mut scanner = Scanner::new(source.to_string());
-    let tokens = scanner.scan_tokens();
+    let tokens = Scanner::scan_from(source.to_string());
 
     if debug && !show_ast && !show_tokens {
         Alert::info("CLI | Debug mode is enabled.".to_string()).show();
@@ -109,6 +108,16 @@ fn read_prompt() -> String {
         if line.trim().is_empty() {
             print!("\n");
             break;
+        }
+
+        if line.ends_with("\n") {
+            let toks = Scanner::scan_from(line.clone());
+
+            if let Err(lang_err) = run(toks.clone()) {
+                lang_err.report_and_exit(1)
+            }
+
+            continue;
         }
 
         source.push_str(&line);
