@@ -1,38 +1,55 @@
 use crate::errors::{Err, RuntimeErr};
 use crate::lox::ast::{Binary, Expr, Grouping, Literal, Stmt, Unary};
+use crate::lox::env::Enviroment;
 use crate::lox::token::*;
 
-pub struct Interpreter;
+#[derive(Default)]
+pub struct Interpreter {
+    env: Enviroment,
+}
 
 impl Interpreter {
     pub fn interpret(stmts: Vec<Stmt>) -> Result<(), Err> {
+        let mut ctx = Interpreter::default();
+
         for stmt in stmts {
-            Self::execute(stmt)?;
+            ctx.execute(stmt)?;
         }
 
         Ok(())
     }
 
-    fn expr_stamtent(expr: Expr) -> Result<(), Err> {
-        Self::evaluate(expr)?;
+    fn var_statement(&mut self, name: Token, initializer: Expr) -> Result<(), Err> {
+        let value = self.evaluate(initializer)?;
+
+        self.env.define(name.get_lexeme(), value);
+        Ok(())
+    }
+
+    fn expr_statement(&self, expr: Expr) -> Result<(), Err> {
+        self.evaluate(expr)?;
 
         Ok(())
     }
 
-    fn print_stament(expr: Expr) -> Result<(), Err> {
-        let val = Self::evaluate(expr)?;
+    fn print_stament(&self, expr: Expr) -> Result<(), Err> {
+        let val = self.evaluate(expr)?;
         println!("{}", Expr::from(val).print());
 
         Ok(())
     }
 
-    fn grouping_expr(group: Grouping) -> Result<Literal, Err> {
-        Interpreter::evaluate(*group.expression)
+    fn var_expr(&self, name: Token) -> Result<Literal, Err> {
+        self.env.get(name.get_lexeme().as_str())
     }
 
-    fn binary_expr(binary: Binary) -> Result<Literal, Err> {
-        let left_expr = Interpreter::evaluate(*binary.left)?;
-        let right_expr = Interpreter::evaluate(*binary.right)?;
+    fn grouping_expr(&self, group: Grouping) -> Result<Literal, Err> {
+        self.evaluate(*group.expression)
+    }
+
+    fn binary_expr(&self, binary: Binary) -> Result<Literal, Err> {
+        let left_expr = self.evaluate(*binary.left)?;
+        let right_expr = self.evaluate(*binary.right)?;
 
         if *binary.operator.get_type() == TokenType::Plus {
             match (left_expr, right_expr) {
@@ -87,8 +104,8 @@ impl Interpreter {
         }
     }
 
-    fn unary_expr(unary: Unary) -> Result<Literal, Err> {
-        let right = Interpreter::evaluate(*unary.right)?;
+    fn unary_expr(&self, unary: Unary) -> Result<Literal, Err> {
+        let right = self.evaluate(*unary.right)?;
 
         match (unary.operator.get_type(), right) {
             (TokenType::Minus, Literal::Number(num)) => Ok(Literal::Number(-num)),
@@ -123,19 +140,21 @@ impl Interpreter {
         }
     }
 
-    fn evaluate(expr: Expr) -> Result<Literal, Err> {
+    fn evaluate(&self, expr: Expr) -> Result<Literal, Err> {
         match expr {
-            Expr::Binary(binary) => Interpreter::binary_expr(binary),
-            Expr::Grouping(group) => Interpreter::grouping_expr(group),
-            Expr::Literal(literal) => Interpreter::literal_expr(literal),
-            Expr::Unary(unary) => Interpreter::unary_expr(unary),
+            Expr::Binary(binary) => self.binary_expr(binary),
+            Expr::Grouping(group) => self.grouping_expr(group),
+            Expr::Literal(literal) => Self::literal_expr(literal),
+            Expr::Unary(unary) => self.unary_expr(unary),
+            Expr::Var(name) => self.var_expr(name),
         }
     }
 
-    fn execute(stmt: Stmt) -> Result<(), Err> {
+    fn execute(&mut self, stmt: Stmt) -> Result<(), Err> {
         match stmt {
-            Stmt::Expression(expr) => Self::expr_stamtent(expr),
-            Stmt::Print(val) => Self::print_stament(val),
+            Stmt::Expression(expr) => self.expr_statement(expr),
+            Stmt::Print(val) => self.print_stament(val),
+            Stmt::Var(n, i) => self.var_statement(n, i),
         }
     }
 }
@@ -156,8 +175,15 @@ mod tests {
 
         if let Some(stmt) = stmts.first() {
             match stmt {
-                Stmt::Expression(expr) => Interpreter::evaluate(expr.clone()),
-                Stmt::Print(expr) => Interpreter::evaluate(expr.clone()),
+                Stmt::Expression(expr) => {
+                    let interpreter = Interpreter::default();
+                    interpreter.evaluate(expr.clone())
+                }
+                Stmt::Print(expr) => {
+                    let interpreter = Interpreter::default();
+                    interpreter.evaluate(expr.clone())
+                }
+                _ => Err(Err::from(RuntimeErr::InvalidOperandTypes)),
             }
         } else {
             Err(Err::from(RuntimeErr::InvalidOperandTypes))

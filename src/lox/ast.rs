@@ -6,6 +6,8 @@ use super::token::Token;
 pub enum Stmt {
     Expression(Expr),
     Print(Expr),
+    // Name, Initializer
+    Var(Token, Expr),
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -14,6 +16,7 @@ pub enum Expr {
     Grouping(Grouping),
     Literal(Literal),
     Unary(Unary),
+    Var(Token),
 }
 
 impl Stmt {
@@ -21,6 +24,9 @@ impl Stmt {
         match self {
             Stmt::Expression(expr) => expr.print(),
             Stmt::Print(expr) => format!("(print {})", expr.print()),
+            Self::Var(name, initializer) => {
+                format!("(var {} = {})", name.to_string(), initializer.print())
+            }
         }
     }
 }
@@ -48,6 +54,9 @@ impl Expr {
                 let Unary { operator, right } = unary;
 
                 AstPrinter::parenthesize(&operator.get_lexeme(), vec![right])
+            }
+            Expr::Var(str) => {
+                format!("var {str}")
             }
         }
     }

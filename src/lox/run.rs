@@ -110,16 +110,6 @@ fn read_prompt() -> String {
             break;
         }
 
-        if line.ends_with("\n") {
-            let toks = Scanner::scan_from(line.clone());
-
-            if let Err(lang_err) = run(toks.clone()) {
-                lang_err.report_and_exit(1)
-            }
-
-            continue;
-        }
-
         source.push_str(&line);
     }
 
@@ -134,7 +124,6 @@ fn run(tokens: Vec<Token>) -> Result<(), Err> {
         Err(lox_err) => {
             // Report parse error and attempt to recover so REPL can continue
             lox_err.report();
-            parser.synchronize();
             return Ok(());
         }
     };
@@ -181,7 +170,6 @@ fn debug_show_ast(tokens: Vec<Token>) {
             Err(lox_error) => {
                 // Report and continue to next line instead of exiting
                 lox_error.report();
-                parser.synchronize();
                 continue;
             }
         }

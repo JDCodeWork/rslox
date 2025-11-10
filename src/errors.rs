@@ -84,6 +84,8 @@ pub enum RuntimeErr {
     InvalidOperandTypes,
     #[error("Division by zero.")]
     DivisionByZero,
+    #[error("Undefined variable \"{0}\".")]
+    UndefinedVariable(String),
 }
 
 impl RuntimeErr {

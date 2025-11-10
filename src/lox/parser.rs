@@ -27,10 +27,37 @@ impl Parser {
         let mut staments = Vec::new();
 
         while !self.is_at_end() {
-            staments.push(self.statment()?);
+            staments.push(self.declaration()?);
         }
 
         Ok(staments)
+    }
+
+    fn declaration(&mut self) -> Result<Stmt, Err> {
+        let stmt = match *self.peek().get_type() {
+            Var => self.var_dec(),
+            _ => self.statment(),
+        };
+
+        if let Err(lox_err) = stmt {
+            self.synchronize();
+            lox_err.report_and_exit(1);
+        }
+
+        stmt
+    }
+
+    fn var_dec(&mut self) -> Result<Stmt, Err> {
+        self.advance();
+        let name = self.consume(Identifier, "Expected a variable name")?;
+
+        let mut initialicer = Expr::from(Literal::Nil);
+        if self.match_token(&[Equal]) {
+            initialicer = self.expression()?;
+        }
+        self.consume(Semicolon, "Expect ';' after variable declaration.")?;
+
+        Ok(Stmt::Var(name, initialicer))
     }
 
     fn statment(&mut self) -> Result<Stmt, Err> {
@@ -155,6 +182,10 @@ impl Parser {
 
                 Expr::Grouping(Grouping::new(expr))
             }
+            Identifier => {
+                self.advance();
+                Expr::Var(self.previous().clone())
+            }
             _ => return Err(ParseErr::UnexpectedEOF(self.current).to_err()),
         };
         Ok(expression)
@@ -209,16 +240,15 @@ impl Parser {
         *self.peek().get_type() == EOF
     }
 
-    fn consume(&mut self, token_type: TokenType, error: &str) -> Result<(), Err> {
+    fn consume(&mut self, token_type: TokenType, error: &str) -> Result<Token, Err> {
         if self.check(&token_type) {
-            self.advance();
-            return Ok(());
+            return Ok(self.advance().clone());
         };
 
         Err(ParseErr::ExpectedToken(error.to_string(), self.current).to_err())
     }
 
-    pub fn synchronize(&mut self) {
+    fn synchronize(&mut self) {
         self.advance();
 
         while !self.is_at_end() {

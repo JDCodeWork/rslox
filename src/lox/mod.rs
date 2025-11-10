@@ -1,4 +1,5 @@
 pub mod ast;
+mod env;
 mod interpreter;
 mod parser;
 mod run;
