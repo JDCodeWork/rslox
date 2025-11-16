@@ -86,6 +86,8 @@ pub enum RuntimeErr {
     DivisionByZero,
     #[error("Undefined variable \"{0}\".")]
     UndefinedVariable(String),
+    #[error("Invalid assignment target.")]
+    InvalidAssigment,
 }
 
 impl RuntimeErr {

@@ -1,5 +1,5 @@
 use crate::errors::{Err, RuntimeErr};
-use crate::lox::ast::{Binary, Expr, Grouping, Literal, Stmt, Unary};
+use crate::lox::ast::{Assignment, Binary, Expr, Grouping, Literal, Stmt, Unary};
 use crate::lox::env::Enviroment;
 use crate::lox::token::*;
 
@@ -26,28 +26,35 @@ impl Interpreter {
         Ok(())
     }
 
-    fn expr_statement(&self, expr: Expr) -> Result<(), Err> {
+    fn expr_statement(&mut self, expr: Expr) -> Result<(), Err> {
         self.evaluate(expr)?;
 
         Ok(())
     }
 
-    fn print_stament(&self, expr: Expr) -> Result<(), Err> {
-        let val = self.evaluate(expr)?;
-        println!("{}", Expr::from(val).print());
+    fn print_stament(&mut self, expr: Expr) -> Result<(), Err> {
+        let val: Expr = self.evaluate(expr)?.into();
+        println!("{}", val.print());
 
         Ok(())
+    }
+
+    fn assign_expr(&mut self, assign: Assignment) -> Result<Literal, Err> {
+        let val = self.evaluate(*assign.value)?;
+        self.env.assign(&assign.name.get_lexeme(), val.clone())?;
+
+        Ok(val)
     }
 
     fn var_expr(&self, name: Token) -> Result<Literal, Err> {
         self.env.get(name.get_lexeme().as_str())
     }
 
-    fn grouping_expr(&self, group: Grouping) -> Result<Literal, Err> {
+    fn grouping_expr(&mut self, group: Grouping) -> Result<Literal, Err> {
         self.evaluate(*group.expression)
     }
 
-    fn binary_expr(&self, binary: Binary) -> Result<Literal, Err> {
+    fn binary_expr(&mut self, binary: Binary) -> Result<Literal, Err> {
         let left_expr = self.evaluate(*binary.left)?;
         let right_expr = self.evaluate(*binary.right)?;
 
@@ -104,7 +111,7 @@ impl Interpreter {
         }
     }
 
-    fn unary_expr(&self, unary: Unary) -> Result<Literal, Err> {
+    fn unary_expr(&mut self, unary: Unary) -> Result<Literal, Err> {
         let right = self.evaluate(*unary.right)?;
 
         match (unary.operator.get_type(), right) {
@@ -140,13 +147,14 @@ impl Interpreter {
         }
     }
 
-    fn evaluate(&self, expr: Expr) -> Result<Literal, Err> {
+    fn evaluate(&mut self, expr: Expr) -> Result<Literal, Err> {
         match expr {
             Expr::Binary(binary) => self.binary_expr(binary),
             Expr::Grouping(group) => self.grouping_expr(group),
             Expr::Literal(literal) => Self::literal_expr(literal),
             Expr::Unary(unary) => self.unary_expr(unary),
             Expr::Var(name) => self.var_expr(name),
+            Expr::Assign(assign) => self.assign_expr(assign)
         }
     }
 
@@ -176,11 +184,11 @@ mod tests {
         if let Some(stmt) = stmts.first() {
             match stmt {
                 Stmt::Expression(expr) => {
-                    let interpreter = Interpreter::default();
+                    let mut interpreter = Interpreter::default();
                     interpreter.evaluate(expr.clone())
                 }
                 Stmt::Print(expr) => {
-                    let interpreter = Interpreter::default();
+                    let mut interpreter = Interpreter::default();
                     interpreter.evaluate(expr.clone())
                 }
                 _ => Err(Err::from(RuntimeErr::InvalidOperandTypes)),

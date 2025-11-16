@@ -12,6 +12,7 @@ pub enum Stmt {
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum Expr {
+    Assign(Assignment),
     Binary(Binary),
     Grouping(Grouping),
     Literal(Literal),
@@ -58,13 +59,19 @@ impl Expr {
             Expr::Var(str) => {
                 format!("var {str}")
             }
+            Expr::Assign(assign) => format!(
+                "Assign {} to {}",
+                assign.value.print(),
+                assign.name.get_lexeme()
+            ),
         }
     }
 }
-impl From<Literal> for Expr {
-    fn from(value: Literal) -> Self {
-        Self::Literal(value)
-    }
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Assignment {
+    pub name: Token,
+    pub value: Box<Expr>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -91,6 +98,51 @@ pub enum Literal {
 pub struct Unary {
     pub operator: Token,
     pub right: Box<Expr>,
+}
+
+impl Into<Expr> for Assignment {
+    fn into(self) -> Expr {
+        Expr::Assign(self)
+    }
+}
+
+impl Into<Expr> for Binary {
+    fn into(self) -> Expr {
+        Expr::Binary(self)
+    }
+}
+
+impl Into<Expr> for Grouping {
+    fn into(self) -> Expr {
+        Expr::Grouping(self)
+    }
+}
+
+impl Into<Expr> for Unary {
+    fn into(self) -> Expr {
+        Expr::Unary(self)
+    }
+}
+
+impl Into<Expr> for Literal {
+    fn into(self) -> Expr {
+        Expr::Literal(self)
+    }
+}
+
+impl Into<Expr> for Token {
+    fn into(self) -> Expr {
+        Expr::Var(self)
+    }
+}
+
+impl Assignment {
+    pub fn new(name: Token, initialicer: Expr) -> Self {
+        Self {
+            name,
+            value: Box::new(initialicer),
+        }
+    }
 }
 
 impl Binary {

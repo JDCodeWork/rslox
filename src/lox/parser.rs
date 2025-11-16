@@ -1,6 +1,6 @@
 use crate::{
-    errors::{Err, ParseErr},
-    lox::ast::Stmt,
+    errors::{Err, ParseErr, RuntimeErr},
+    lox::ast::{Assignment, Stmt},
 };
 
 use super::{
@@ -51,7 +51,7 @@ impl Parser {
         self.advance();
         let name = self.consume(Identifier, "Expected a variable name")?;
 
-        let mut initialicer = Expr::from(Literal::Nil);
+        let mut initialicer = Literal::Nil.into();
         if self.match_token(&[Equal]) {
             initialicer = self.expression()?;
         }
@@ -84,7 +84,23 @@ impl Parser {
     }
 
     fn expression(&mut self) -> Result<Expr, Err> {
-        self.equality()
+        self.assignment()
+    }
+
+    fn assignment(&mut self) -> Result<Expr, Err> {
+        let expr = self.equality()?;
+
+        if !self.match_token(&[Equal]) {
+            return Ok(expr);
+        }
+
+        let val = self.assignment()?;
+
+        if let Expr::Var(name) = expr {
+            Ok(Assignment::new(name, val).into())
+        } else {
+            Err(RuntimeErr::InvalidAssigment.to_err())
+        }
     }
 
     fn equality(&mut self) -> Result<Expr, Err> {
@@ -94,7 +110,7 @@ impl Parser {
             let operator = self.previous().clone();
             let right = self.comparison()?;
 
-            expression = Expr::Binary(Binary::new(expression, operator, right));
+            expression = Binary::new(expression, operator, right).into();
         }
 
         Ok(expression)
@@ -107,7 +123,7 @@ impl Parser {
             let operator = self.previous().clone();
             let right = self.term()?;
 
-            expression = Expr::Binary(Binary::new(expression, operator, right))
+            expression = Binary::new(expression, operator, right).into()
         }
 
         Ok(expression)
@@ -120,7 +136,7 @@ impl Parser {
             let operator = self.previous().clone();
             let right = self.factor()?;
 
-            expression = Expr::Binary(Binary::new(expression, operator, right))
+            expression = Binary::new(expression, operator, right).into()
         }
 
         Ok(expression)
@@ -133,7 +149,7 @@ impl Parser {
             let operator = self.previous().clone();
             let right = self.unary()?;
 
-            expression = Expr::Binary(Binary::new(expression, operator, right))
+            expression = Binary::new(expression, operator, right).into()
         }
 
         Ok(expression)
@@ -144,7 +160,7 @@ impl Parser {
             let operator = self.previous().clone();
             let right = self.unary()?;
 
-            Ok(Expr::Unary(Unary::new(operator, right)))
+            Ok(Unary::new(operator, right).into())
         } else {
             self.primary()
         }
@@ -156,23 +172,23 @@ impl Parser {
         let expression = match token_type {
             False => {
                 self.advance();
-                Expr::Literal(Literal::Boolean(false))
+                Literal::Boolean(false).into()
             }
             True => {
                 self.advance();
-                Expr::Literal(Literal::Boolean(true))
+                Literal::Boolean(true).into()
             }
             Nil => {
                 self.advance();
-                Expr::Literal(Literal::Nil)
+                Literal::Nil.into()
             }
             Number(num) => {
                 self.advance();
-                Expr::Literal(Literal::Number(num))
+                Literal::Number(num).into()
             }
             String(str) => {
                 self.advance();
-                Expr::Literal(Literal::String(str))
+                Literal::String(str).into()
             }
             LeftParen => {
                 self.advance();
@@ -180,12 +196,9 @@ impl Parser {
 
                 self.consume(RightParen, "Expect ')' after expression.")?;
 
-                Expr::Grouping(Grouping::new(expr))
+                Grouping::new(expr).into()
             }
-            Identifier => {
-                self.advance();
-                Expr::Var(self.previous().clone())
-            }
+            Identifier => Expr::Var(self.advance().clone()),
             _ => return Err(ParseErr::UnexpectedEOF(self.current).to_err()),
         };
         Ok(expression)
