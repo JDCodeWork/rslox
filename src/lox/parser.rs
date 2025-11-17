@@ -1,6 +1,6 @@
 use crate::{
     errors::{Err, ParseErr, RuntimeErr},
-    lox::ast::{Assignment, Stmt},
+    lox::ast::{Assignment, Stmt, VarStmt},
 };
 
 use super::{
@@ -57,7 +57,7 @@ impl Parser {
         }
         self.consume(Semicolon, "Expect ';' after variable declaration.")?;
 
-        Ok(Stmt::Var(name, initialicer))
+        Ok(VarStmt::new(name, initialicer).into())
     }
 
     fn statment(&mut self) -> Result<Stmt, Err> {

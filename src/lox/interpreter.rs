@@ -1,5 +1,5 @@
 use crate::errors::{Err, RuntimeErr};
-use crate::lox::ast::{Assignment, Binary, Expr, Grouping, Literal, Stmt, Unary};
+use crate::lox::ast::{Assignment, Binary, Expr, Grouping, Literal, Stmt, Unary, VarStmt};
 use crate::lox::env::Enviroment;
 use crate::lox::token::*;
 
@@ -19,10 +19,10 @@ impl Interpreter {
         Ok(())
     }
 
-    fn var_statement(&mut self, name: Token, initializer: Expr) -> Result<(), Err> {
-        let value = self.evaluate(initializer)?;
+    fn var_statement(&mut self, var_stmt: VarStmt) -> Result<(), Err> {
+        let value = self.evaluate(var_stmt.val)?;
 
-        self.env.define(name.get_lexeme(), value);
+        self.env.define(var_stmt.name.get_lexeme(), value);
         Ok(())
     }
 
@@ -154,7 +154,7 @@ impl Interpreter {
             Expr::Literal(literal) => Self::literal_expr(literal),
             Expr::Unary(unary) => self.unary_expr(unary),
             Expr::Var(name) => self.var_expr(name),
-            Expr::Assign(assign) => self.assign_expr(assign)
+            Expr::Assign(assign) => self.assign_expr(assign),
         }
     }
 
@@ -162,7 +162,7 @@ impl Interpreter {
         match stmt {
             Stmt::Expression(expr) => self.expr_statement(expr),
             Stmt::Print(val) => self.print_stament(val),
-            Stmt::Var(n, i) => self.var_statement(n, i),
+            Stmt::Var(var_stmt) => self.var_statement(var_stmt),
         }
     }
 }

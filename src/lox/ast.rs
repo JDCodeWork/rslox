@@ -2,12 +2,13 @@ use crate::tools::AstPrinter;
 
 use super::token::Token;
 
+// region: higher-level structures
+
 #[derive(PartialEq, Debug, Clone)]
 pub enum Stmt {
     Expression(Expr),
     Print(Expr),
-    // Name, Initializer
-    Var(Token, Expr),
+    Var(VarStmt),
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -20,13 +21,160 @@ pub enum Expr {
     Var(Token),
 }
 
+// endregion
+
+// region: lower-level structures
+
+// region: Stmt structures
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct VarStmt {
+    pub name: Token,
+    pub val: Expr,
+}
+
+// endregion
+
+// region: Expr strcutures
+#[derive(Debug, PartialEq, Clone)]
+pub struct Assignment {
+    pub name: Token,
+    pub value: Box<Expr>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Binary {
+    pub left: Box<Expr>,
+    pub operator: Token,
+    pub right: Box<Expr>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Grouping {
+    pub expression: Box<Expr>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Literal {
+    Nil,
+    Boolean(bool),
+    Number(f64),
+    String(String),
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Unary {
+    pub operator: Token,
+    pub right: Box<Expr>,
+}
+
+// endregion
+
+// endregion
+
+// region: Into trait implementation
+
+impl Into<Stmt> for VarStmt {
+    fn into(self) -> Stmt {
+        Stmt::Var(self)
+    }
+}
+
+impl Into<Expr> for Assignment {
+    fn into(self) -> Expr {
+        Expr::Assign(self)
+    }
+}
+
+impl Into<Expr> for Binary {
+    fn into(self) -> Expr {
+        Expr::Binary(self)
+    }
+}
+
+impl Into<Expr> for Grouping {
+    fn into(self) -> Expr {
+        Expr::Grouping(self)
+    }
+}
+
+impl Into<Expr> for Unary {
+    fn into(self) -> Expr {
+        Expr::Unary(self)
+    }
+}
+
+impl Into<Expr> for Literal {
+    fn into(self) -> Expr {
+        Expr::Literal(self)
+    }
+}
+
+impl Into<Expr> for Token {
+    fn into(self) -> Expr {
+        Expr::Var(self)
+    }
+}
+
+// endregion
+
+// region: Implementation of new assotiated function
+impl VarStmt {
+    pub fn new(name: Token, val: Expr) -> Self {
+        Self { name, val }
+    }
+}
+
+impl Assignment {
+    pub fn new(name: Token, initialicer: Expr) -> Self {
+        Self {
+            name,
+            value: Box::new(initialicer),
+        }
+    }
+}
+
+impl Binary {
+    pub fn new(left: Expr, operator: Token, right: Expr) -> Self {
+        Self {
+            left: Box::new(left),
+            operator,
+            right: Box::new(right),
+        }
+    }
+}
+
+impl Grouping {
+    pub fn new(expression: Expr) -> Self {
+        Self {
+            expression: Box::new(expression),
+        }
+    }
+}
+
+impl Unary {
+    pub fn new(operator: Token, right: Expr) -> Self {
+        Self {
+            operator,
+            right: Box::new(right),
+        }
+    }
+}
+
+// endregion
+
+// region: implementation of printing for ast structures
 impl Stmt {
     pub fn print(self) -> String {
         match self {
             Stmt::Expression(expr) => expr.print(),
             Stmt::Print(expr) => format!("(print {})", expr.print()),
-            Self::Var(name, initializer) => {
-                format!("(var {} = {})", name.to_string(), initializer.print())
+            Self::Var(var_stmt) => {
+                format!(
+                    "(var {} = {})",
+                    var_stmt.name.to_string(),
+                    var_stmt.val.print()
+                )
             }
         }
     }
@@ -68,106 +216,4 @@ impl Expr {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub struct Assignment {
-    pub name: Token,
-    pub value: Box<Expr>,
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct Binary {
-    pub left: Box<Expr>,
-    pub operator: Token,
-    pub right: Box<Expr>,
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct Grouping {
-    pub expression: Box<Expr>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Literal {
-    Nil,
-    Boolean(bool),
-    Number(f64),
-    String(String),
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct Unary {
-    pub operator: Token,
-    pub right: Box<Expr>,
-}
-
-impl Into<Expr> for Assignment {
-    fn into(self) -> Expr {
-        Expr::Assign(self)
-    }
-}
-
-impl Into<Expr> for Binary {
-    fn into(self) -> Expr {
-        Expr::Binary(self)
-    }
-}
-
-impl Into<Expr> for Grouping {
-    fn into(self) -> Expr {
-        Expr::Grouping(self)
-    }
-}
-
-impl Into<Expr> for Unary {
-    fn into(self) -> Expr {
-        Expr::Unary(self)
-    }
-}
-
-impl Into<Expr> for Literal {
-    fn into(self) -> Expr {
-        Expr::Literal(self)
-    }
-}
-
-impl Into<Expr> for Token {
-    fn into(self) -> Expr {
-        Expr::Var(self)
-    }
-}
-
-impl Assignment {
-    pub fn new(name: Token, initialicer: Expr) -> Self {
-        Self {
-            name,
-            value: Box::new(initialicer),
-        }
-    }
-}
-
-impl Binary {
-    pub fn new(left: Expr, operator: Token, right: Expr) -> Self {
-        Self {
-            left: Box::new(left),
-            operator,
-            right: Box::new(right),
-        }
-    }
-}
-
-impl Grouping {
-    pub fn new(expression: Expr) -> Self {
-        Self {
-            expression: Box::new(expression),
-        }
-    }
-}
-
-impl Unary {
-    pub fn new(operator: Token, right: Expr) -> Self {
-        Self {
-            operator,
-            right: Box::new(right),
-        }
-    }
-}
+// endregion

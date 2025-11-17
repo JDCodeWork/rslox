@@ -43,7 +43,7 @@ fn handle_tool_command(tool_type: &ToolCommand) {
     }
 }
 
-// endregion: Command handlers
+// endregion
 
 // region: Subcommand handlers
 
@@ -63,4 +63,4 @@ fn handle_gen_ast_tool(output_path: &String) {
     Alert::success(String::from("CLI | AST successfully created")).show();
 }
 
-// endregion: Subcommand handlers
+// endregion
