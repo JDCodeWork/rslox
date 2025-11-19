@@ -63,8 +63,22 @@ impl Parser {
     fn statment(&mut self) -> Result<Stmt, Err> {
         match *self.peek().get_type() {
             Print => self.print_stmt(),
+            LeftBrace => self.block_stmt(),
             _ => self.expr_stmt(),
         }
+    }
+
+    fn block_stmt(&mut self) -> Result<Stmt, Err> {
+        self.advance(); // Consume '{' token
+
+        let mut stmts = Vec::new();
+
+        while !self.check(&RightBrace) && !self.is_at_end() {
+            stmts.push(self.declaration()?);
+        }
+        self.consume(RightBrace, "Expected '}' after block.")?;
+
+        Ok(Stmt::Block(stmts))
     }
 
     fn print_stmt(&mut self) -> Result<Stmt, Err> {

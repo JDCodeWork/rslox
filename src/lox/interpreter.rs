@@ -3,9 +3,9 @@ use crate::lox::ast::{Assignment, Binary, Expr, Grouping, Literal, Stmt, Unary, 
 use crate::lox::env::Enviroment;
 use crate::lox::token::*;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Interpreter {
-    env: Enviroment,
+    pub(crate) env: Enviroment,
 }
 
 impl Interpreter {
@@ -41,13 +41,13 @@ impl Interpreter {
 
     fn assign_expr(&mut self, assign: Assignment) -> Result<Literal, Err> {
         let val = self.evaluate(*assign.value)?;
-        self.env.assign(&assign.name.get_lexeme(), val.clone())?;
+        self.env.assign(assign.name, val.clone())?;
 
         Ok(val)
     }
 
     fn var_expr(&self, name: Token) -> Result<Literal, Err> {
-        self.env.get(name.get_lexeme().as_str())
+        self.env.get(name)
     }
 
     fn grouping_expr(&mut self, group: Grouping) -> Result<Literal, Err> {
@@ -158,11 +158,31 @@ impl Interpreter {
         }
     }
 
-    fn execute(&mut self, stmt: Stmt) -> Result<(), Err> {
+    fn execute_block(&mut self, stmts: Vec<Stmt>, env: Enviroment) -> Result<(), Err> {
+        let prev_env = self.env.clone();
+
+        self.env = env;
+
+        for stmt in stmts {
+            if let Err(some) = self.execute(stmt) {
+                some.report();
+                break;
+            }
+        }
+
+        self.env = prev_env;
+
+        Ok(())
+    }
+
+    pub fn execute(&mut self, stmt: Stmt) -> Result<(), Err> {
         match stmt {
             Stmt::Expression(expr) => self.expr_statement(expr),
             Stmt::Print(val) => self.print_stament(val),
             Stmt::Var(var_stmt) => self.var_statement(var_stmt),
+            Stmt::Block(stmts) => {
+                self.execute_block(stmts, Enviroment::new(Some(self.env.clone())))
+            }
         }
     }
 }
@@ -205,6 +225,13 @@ mod tests {
 
         let stmts = parser.parse().map_err(Err::from)?;
         Interpreter::interpret(stmts)
+    }
+
+    fn parse_stmts(src: &str) -> Vec<Stmt> {
+        let mut scanner = Scanner::new(src.to_string());
+        let tokens = scanner.scan_tokens().clone();
+        let mut parser = Parser::new(tokens);
+        parser.parse().expect("Failed to parse statements")
     }
 
     #[test]
@@ -251,5 +278,85 @@ mod tests {
             res.is_ok(),
             "Expression statement should execute successfully"
         );
+    }
+
+    #[test]
+    fn test_variable_declaration() {
+        let mut interpreter = Interpreter::default();
+        let stmts = parse_stmts("var a = 1;");
+        for stmt in stmts {
+            interpreter.execute(stmt).expect("execution failed");
+        }
+
+        // Check if 'a' is in the environment
+        let token = Token::new(TokenType::Identifier, "a".to_string(), 1);
+        let val = interpreter.env.get(token).expect("variable lookup failed");
+        assert_eq!(val, Literal::Number(1.0));
+    }
+
+    #[test]
+    fn test_variable_assignment() {
+        let mut interpreter = Interpreter::default();
+        let stmts = parse_stmts("var a = 1; a = 2;");
+        for stmt in stmts {
+            interpreter.execute(stmt).expect("execution failed");
+        }
+
+        let token = Token::new(TokenType::Identifier, "a".to_string(), 1);
+        let val = interpreter.env.get(token).expect("variable lookup failed");
+        assert_eq!(val, Literal::Number(2.0));
+    }
+
+    #[test]
+    fn test_block_scope() {
+        let mut interpreter = Interpreter::default();
+        let src = "
+            var a = \"global\";
+            {
+                var a = \"block\";
+                var b = \"block_b\";
+            }
+        ";
+        let stmts = parse_stmts(src);
+        for stmt in stmts {
+            interpreter.execute(stmt).expect("execution failed");
+        }
+
+        let token_a = Token::new(TokenType::Identifier, "a".to_string(), 1);
+        let val_a = interpreter
+            .env
+            .get(token_a)
+            .expect("variable lookup failed");
+        assert_eq!(val_a, Literal::String("global".to_string()));
+
+        let token_b = Token::new(TokenType::Identifier, "b".to_string(), 1);
+        let val_b = interpreter.env.get(token_b);
+        assert!(
+            val_b.is_err(),
+            "Variable b should not be accessible outside the block"
+        );
+    }
+
+    #[test]
+    fn test_scope_shadowing_and_assignment() {
+        let mut interpreter = Interpreter::default();
+        let src = "
+            var a = 1;
+            {
+                var a = 2;
+                a = 3;
+            }
+        ";
+        let stmts = parse_stmts(src);
+        for stmt in stmts {
+            interpreter.execute(stmt).expect("execution failed");
+        }
+
+        let token_a = Token::new(TokenType::Identifier, "a".to_string(), 1);
+        let val_a = interpreter
+            .env
+            .get(token_a)
+            .expect("variable lookup failed");
+        assert_eq!(val_a, Literal::Number(1.0));
     }
 }

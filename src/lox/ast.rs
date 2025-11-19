@@ -9,6 +9,7 @@ pub enum Stmt {
     Expression(Expr),
     Print(Expr),
     Var(VarStmt),
+    Block(Vec<Stmt>),
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -169,12 +170,20 @@ impl Stmt {
         match self {
             Stmt::Expression(expr) => expr.print(),
             Stmt::Print(expr) => format!("(print {})", expr.print()),
-            Self::Var(var_stmt) => {
+            Stmt::Var(var_stmt) => {
                 format!(
                     "(var {} = {})",
                     var_stmt.name.to_string(),
                     var_stmt.val.print()
                 )
+            }
+            Stmt::Block(stmts) => {
+                let mut result = String::from("(block");
+                for stmt in stmts {
+                    result.push_str(&format!(" {}", stmt.print()));
+                }
+                result.push(')');
+                result
             }
         }
     }

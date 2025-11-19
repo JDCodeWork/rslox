@@ -2,9 +2,10 @@ use std::collections::BTreeMap;
 
 use crate::{
     errors::{Err, RuntimeErr},
-    lox::ast::Literal,
+    lox::{ast::Literal, token::Token},
 };
 
+#[derive(Clone, Debug)]
 pub struct Enviroment {
     values: BTreeMap<String, Literal>,
     enclosing: Option<Box<Enviroment>>,
@@ -20,25 +21,32 @@ impl Default for Enviroment {
 }
 
 impl Enviroment {
+    pub fn new(enclosing: Option<Enviroment>) -> Self {
+        Self {
+            values: BTreeMap::new(),
+            enclosing: enclosing.map(Box::new),
+        }
+    }
+
     pub fn define(&mut self, name: String, value: Literal) {
         self.values.insert(name, value);
     }
 
-    pub fn get(&self, name: &str) -> Result<Literal, Err> {
-        if let Some(val) = self.values.get(name) {
+    pub fn get(&self, name: Token) -> Result<Literal, Err> {
+        if let Some(val) = self.values.get(&name.get_lexeme()) {
             return Ok(val.to_owned());
         }
 
-        if let Some(ref enclosing) = self.enclosing {
+        if let Some(enclosing) = &self.enclosing {
             return enclosing.get(name);
         }
 
-        Err(RuntimeErr::UndefinedVariable(name.into()).to_err())
+        Err(RuntimeErr::UndefinedVariable(name.get_lexeme(), name.get_line()).to_err())
     }
 
-    pub fn assign(&mut self, name: &str, value: Literal) -> Result<(), Err> {
-        if self.values.contains_key(name) {
-            self.values.insert(name.into(), value);
+    pub fn assign(&mut self, name: Token, value: Literal) -> Result<(), Err> {
+        if self.values.contains_key(&name.get_lexeme()) {
+            self.values.insert(name.get_lexeme(), value);
             return Ok(());
         }
 
@@ -47,6 +55,6 @@ impl Enviroment {
             return Ok(());
         }
 
-        Err(RuntimeErr::UndefinedVariable(name.into()).to_err())
+        Err(RuntimeErr::UndefinedVariable(name.get_lexeme(), name.get_line()).to_err())
     }
 }

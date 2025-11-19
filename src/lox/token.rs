@@ -4,7 +4,7 @@ use std::fmt;
 pub struct Token {
     token_type: TokenType,
     lexeme: String,
-    line: isize,
+    line: usize,
 }
 
 impl PartialEq for Token {
@@ -15,10 +15,8 @@ impl PartialEq for Token {
     }
 }
 
-impl Eq for Token {}
-
 impl Token {
-    pub fn new(token_type: TokenType, lexeme: String, line: isize) -> Self {
+    pub fn new(token_type: TokenType, lexeme: String, line: usize) -> Self {
         Token {
             token_type,
             lexeme,
@@ -44,7 +42,7 @@ impl Token {
         self.lexeme.clone()
     }
 
-    pub fn get_line(&self) -> isize {
+    pub fn get_line(&self) -> usize {
         self.line
     }
 }

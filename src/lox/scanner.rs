@@ -64,7 +64,7 @@ impl Scanner {
         self.tokens.push(Token::new(
             TokenType::EOF,
             String::new(),
-            self.line as isize,
+            self.line,
         ));
         &self.tokens
     }
@@ -171,7 +171,7 @@ impl Scanner {
         } = self;
 
         let text = &source[*start..*current];
-        tokens.push(Token::new(token_type, text.to_string(), *line as isize));
+        tokens.push(Token::new(token_type, text.to_string(), *line));
     }
 
     fn is_at_end(&self) -> bool {
