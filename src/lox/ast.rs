@@ -9,6 +9,7 @@ pub enum Stmt {
     Expression(Expr),
     Print(Expr),
     Var(VarStmt),
+    If(IfStmt),
     Block(Vec<Stmt>),
 }
 
@@ -27,6 +28,12 @@ pub enum Expr {
 // region: lower-level structures
 
 // region: Stmt structures
+#[derive(Debug, PartialEq, Clone)]
+pub struct IfStmt {
+    pub condition: Expr,
+    pub then_b: Box<Stmt>,
+    pub else_b: Box<Stmt>,
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct VarStmt {
@@ -36,7 +43,7 @@ pub struct VarStmt {
 
 // endregion
 
-// region: Expr strcutures
+// region: Expr structures
 #[derive(Debug, PartialEq, Clone)]
 pub struct Assignment {
     pub name: Token,
@@ -75,6 +82,12 @@ pub struct Unary {
 
 // region: Into trait implementation
 
+impl Into<Stmt> for IfStmt {
+    fn into(self) -> Stmt {
+        Stmt::If(self)
+    }
+}
+
 impl Into<Stmt> for VarStmt {
     fn into(self) -> Stmt {
         Stmt::Var(self)
@@ -111,6 +124,12 @@ impl Into<Expr> for Literal {
     }
 }
 
+impl Into<Stmt> for Literal {
+    fn into(self) -> Stmt {
+        Stmt::Expression(self.into())
+    }
+}
+
 impl Into<Expr> for Token {
     fn into(self) -> Expr {
         Expr::Var(self)
@@ -119,7 +138,17 @@ impl Into<Expr> for Token {
 
 // endregion
 
-// region: Implementation of new assotiated function
+// region: Implementation of new associated function
+impl IfStmt {
+    pub fn new(cond: Expr, then_b: Stmt, else_b: Stmt) -> Self {
+        Self {
+            condition: cond,
+            then_b: Box::new(then_b),
+            else_b: Box::new(else_b),
+        }
+    }
+}
+
 impl VarStmt {
     pub fn new(name: Token, val: Expr) -> Self {
         Self { name, val }
@@ -127,10 +156,10 @@ impl VarStmt {
 }
 
 impl Assignment {
-    pub fn new(name: Token, initialicer: Expr) -> Self {
+    pub fn new(name: Token, initializer: Expr) -> Self {
         Self {
             name,
-            value: Box::new(initialicer),
+            value: Box::new(initializer),
         }
     }
 }
@@ -184,6 +213,20 @@ impl Stmt {
                 }
                 result.push(')');
                 result
+            }
+            Stmt::If(if_stmt) => {
+                let IfStmt {
+                    condition,
+                    then_b,
+                    else_b,
+                } = if_stmt;
+
+                format!(
+                    "(if {} then {} else {})",
+                    condition.print(),
+                    then_b.print(),
+                    else_b.print()
+                )
             }
         }
     }

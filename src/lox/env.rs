@@ -6,12 +6,12 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
-pub struct Enviroment {
+pub struct Environment {
     values: BTreeMap<String, Literal>,
-    enclosing: Option<Box<Enviroment>>,
+    enclosing: Option<Box<Environment>>,
 }
 
-impl Default for Enviroment {
+impl Default for Environment {
     fn default() -> Self {
         Self {
             values: BTreeMap::new(),
@@ -20,8 +20,8 @@ impl Default for Enviroment {
     }
 }
 
-impl Enviroment {
-    pub fn new(enclosing: Option<Enviroment>) -> Self {
+impl Environment {
+    pub fn new(enclosing: Option<Environment>) -> Self {
         Self {
             values: BTreeMap::new(),
             enclosing: enclosing.map(Box::new),

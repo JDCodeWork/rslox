@@ -1,11 +1,11 @@
 use crate::errors::{Err, RuntimeErr};
-use crate::lox::ast::{Assignment, Binary, Expr, Grouping, Literal, Stmt, Unary, VarStmt};
-use crate::lox::env::Enviroment;
+use crate::lox::ast::{Assignment, Binary, Expr, Grouping, IfStmt, Literal, Stmt, Unary, VarStmt};
+use crate::lox::env::Environment;
 use crate::lox::token::*;
 
 #[derive(Default, Debug)]
 pub struct Interpreter {
-    pub(crate) env: Enviroment,
+    pub(crate) env: Environment,
 }
 
 impl Interpreter {
@@ -14,6 +14,16 @@ impl Interpreter {
 
         for stmt in stmts {
             ctx.execute(stmt)?;
+        }
+
+        Ok(())
+    }
+
+    fn if_statement(&mut self, if_stmt: IfStmt) -> Result<(), Err> {
+        if Self::is_truthy(self.evaluate(if_stmt.condition)?)? {
+            self.execute(*if_stmt.then_b)?;
+        } else if *if_stmt.else_b != Literal::Nil.into() {
+            self.execute(*if_stmt.else_b)?;
         }
 
         Ok(())
@@ -32,7 +42,7 @@ impl Interpreter {
         Ok(())
     }
 
-    fn print_stament(&mut self, expr: Expr) -> Result<(), Err> {
+    fn print_statement(&mut self, expr: Expr) -> Result<(), Err> {
         let val: Expr = self.evaluate(expr)?.into();
         println!("{}", val.print());
 
@@ -158,7 +168,7 @@ impl Interpreter {
         }
     }
 
-    fn execute_block(&mut self, stmts: Vec<Stmt>, env: Enviroment) -> Result<(), Err> {
+    fn execute_block(&mut self, stmts: Vec<Stmt>, env: Environment) -> Result<(), Err> {
         let prev_env = self.env.clone();
 
         self.env = env;
@@ -178,11 +188,12 @@ impl Interpreter {
     pub fn execute(&mut self, stmt: Stmt) -> Result<(), Err> {
         match stmt {
             Stmt::Expression(expr) => self.expr_statement(expr),
-            Stmt::Print(val) => self.print_stament(val),
+            Stmt::Print(val) => self.print_statement(val),
             Stmt::Var(var_stmt) => self.var_statement(var_stmt),
             Stmt::Block(stmts) => {
-                self.execute_block(stmts, Enviroment::new(Some(self.env.clone())))
+                self.execute_block(stmts, Environment::new(Some(self.env.clone())))
             }
+            Stmt::If(if_stmt) => self.if_statement(if_stmt),
         }
     }
 }
@@ -358,5 +369,98 @@ mod tests {
             .get(token_a)
             .expect("variable lookup failed");
         assert_eq!(val_a, Literal::Number(1.0));
+    }
+
+    #[test]
+    fn test_if_statement_true() {
+        let mut interpreter = Interpreter::default();
+        let src = "
+            var a = 1;
+            if (true) {
+                a = 2;
+            }
+        ";
+
+        let stmts = parse_stmts(src);
+        for stmt in stmts {
+            interpreter.execute(stmt).expect("execution failed");
+        }
+
+        let token_a = Token::new(TokenType::Identifier, "a".to_string(), 1);
+        let val_a = interpreter
+            .env
+            .get(token_a)
+            .expect("variable lookup failed");
+        assert_eq!(val_a, Literal::Number(2.0));
+    }
+
+    #[test]
+    fn test_if_statement_false() {
+        let mut interpreter = Interpreter::default();
+        let src = "
+            var a = 1;
+            if (false) {
+                a = 2;
+            }
+        ";
+        let stmts = parse_stmts(src);
+        for stmt in stmts {
+            interpreter.execute(stmt).expect("execution failed");
+        }
+
+        let token_a = Token::new(TokenType::Identifier, "a".to_string(), 1);
+        let val_a = interpreter
+            .env
+            .get(token_a)
+            .expect("variable lookup failed");
+        assert_eq!(val_a, Literal::Number(1.0));
+    }
+
+    #[test]
+    fn test_if_else_statement_true() {
+        let mut interpreter = Interpreter::default();
+        let src = "
+            var a = 1;
+            if (true) {
+                a = 2;
+            } else {
+                a = 3;
+            }
+        ";
+        let stmts = parse_stmts(src);
+        for stmt in stmts {
+            interpreter.execute(stmt).expect("execution failed");
+        }
+
+        let token_a = Token::new(TokenType::Identifier, "a".to_string(), 1);
+        let val_a = interpreter
+            .env
+            .get(token_a)
+            .expect("variable lookup failed");
+        assert_eq!(val_a, Literal::Number(2.0));
+    }
+
+    #[test]
+    fn test_if_else_statement_false() {
+        let mut interpreter = Interpreter::default();
+        let src = "
+            var a = 1;
+            if (false) {
+                a = 2;
+            } else {
+                a = 3;
+            }
+        ";
+        let stmts = parse_stmts(src);
+        for stmt in stmts {
+            interpreter.execute(stmt).expect("execution failed");
+        }
+
+        let token_a = Token::new(TokenType::Identifier, "a".to_string(), 1);
+        let val_a = interpreter
+            .env
+            .get(token_a)
+            .expect("variable lookup failed");
+        assert_eq!(val_a, Literal::Number(3.0));
     }
 }

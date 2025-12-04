@@ -1,6 +1,6 @@
 use crate::{
     errors::{Err, ParseErr, RuntimeErr},
-    lox::ast::{Assignment, Stmt, VarStmt},
+    lox::ast::{Assignment, IfStmt, Stmt, VarStmt},
 };
 
 use super::{
@@ -24,19 +24,19 @@ impl Parser {
 
 impl Parser {
     pub fn parse(&mut self) -> Result<Vec<Stmt>, Err> {
-        let mut staments = Vec::new();
+        let mut statements = Vec::new();
 
         while !self.is_at_end() {
-            staments.push(self.declaration()?);
+            statements.push(self.declaration()?);
         }
 
-        Ok(staments)
+        Ok(statements)
     }
 
     fn declaration(&mut self) -> Result<Stmt, Err> {
         let stmt = match *self.peek().get_type() {
             Var => self.var_dec(),
-            _ => self.statment(),
+            _ => self.statement(),
         };
 
         if let Err(lox_err) = stmt {
@@ -51,21 +51,39 @@ impl Parser {
         self.advance();
         let name = self.consume(Identifier, "Expected a variable name")?;
 
-        let mut initialicer = Literal::Nil.into();
+        let mut init = Literal::Nil.into();
         if self.match_token(&[Equal]) {
-            initialicer = self.expression()?;
+            init = self.expression()?;
         }
         self.consume(Semicolon, "Expect ';' after variable declaration.")?;
 
-        Ok(VarStmt::new(name, initialicer).into())
+        Ok(VarStmt::new(name, init).into())
     }
 
-    fn statment(&mut self) -> Result<Stmt, Err> {
+    fn statement(&mut self) -> Result<Stmt, Err> {
         match *self.peek().get_type() {
             Print => self.print_stmt(),
             LeftBrace => self.block_stmt(),
+            If => self.if_stmt(),
             _ => self.expr_stmt(),
         }
+    }
+
+    fn if_stmt(&mut self) -> Result<Stmt, Err> {
+        self.advance(); // Consume If token
+
+        self.advance(); // Consume '(' token
+        let cond = self.expression()?;
+        self.advance(); // Consume ')' token
+
+        let then_b = self.statement()?;
+
+        let mut else_b: Stmt = Literal::Nil.into();
+        if self.match_token(&[Else]) {
+            else_b = self.statement()?;
+        }
+
+        Ok(IfStmt::new(cond, then_b, else_b).into())
     }
 
     fn block_stmt(&mut self) -> Result<Stmt, Err> {
@@ -113,7 +131,7 @@ impl Parser {
         if let Expr::Var(name) = expr {
             Ok(Assignment::new(name, val).into())
         } else {
-            Err(RuntimeErr::InvalidAssigment.to_err())
+            Err(RuntimeErr::InvalidAssignment.to_err())
         }
     }
 

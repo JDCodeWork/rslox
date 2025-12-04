@@ -8,6 +8,10 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+### Added
+
+- Interpretation and parsing for control flow statements: `while`, `for`, and `if-else`.
+
 ## [0.7.0] - 2025-11-19
 
 ### Added

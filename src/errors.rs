@@ -87,7 +87,7 @@ pub enum RuntimeErr {
     #[error("Undefined variable \"{0}\" at line {1}.")]
     UndefinedVariable(String, usize),
     #[error("Invalid assignment target.")]
-    InvalidAssigment,
+    InvalidAssignment,
 }
 
 impl RuntimeErr {
