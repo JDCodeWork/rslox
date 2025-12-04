@@ -1,60 +1,70 @@
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 use crate::{
     errors::{Err, RuntimeErr},
     lox::{ast::Literal, token::Token},
 };
 
+/**
+ * Here we have a problem, in Crafting Interpreters, the Environment was implemented using a values map and a pointer to the enclosing environment, that is fine in Java
+ * because it has garbage collection, but in Rust we have to deal with ownership and borrowing rules
+ *
+ * In my first iteration I tried to implement it similarly to the book using BTreeMap for the values and Option Box<Environment> for the enclosing environment but
+ * it didn't work well due to Rust's ownership model.
+ *
+ *
+ * To solve this, a lot of languages would use other techniques like using a property called scopes, which is a stack of maps, also I found that in this context for the
+ * variables lookup a HashMap would be more efficient than a BTreeMap, that is because in most cases the number of variables per scope is small and the lookup time for
+ * a HashMap is O(1) on average, while for a BTreeMap is O(log n).
+ *
+ */
+
 #[derive(Clone, Debug)]
 pub struct Environment {
-    values: BTreeMap<String, Literal>,
-    enclosing: Option<Box<Environment>>,
+    scopes: Vec<HashMap<String, Literal>>,
 }
 
 impl Default for Environment {
     fn default() -> Self {
         Self {
-            values: BTreeMap::new(),
-            enclosing: None,
+            scopes: vec![HashMap::new()],
         }
     }
 }
 
 impl Environment {
-    pub fn new(enclosing: Option<Environment>) -> Self {
-        Self {
-            values: BTreeMap::new(),
-            enclosing: enclosing.map(Box::new),
-        }
-    }
-
     pub fn define(&mut self, name: String, value: Literal) {
-        self.values.insert(name, value);
+        if let Some(scope) = self.scopes.last_mut() {
+            scope.insert(name, value);
+        }
     }
 
     pub fn get(&self, name: Token) -> Result<Literal, Err> {
-        if let Some(val) = self.values.get(&name.get_lexeme()) {
-            return Ok(val.to_owned());
-        }
-
-        if let Some(enclosing) = &self.enclosing {
-            return enclosing.get(name);
+        for scope in self.scopes.iter() {
+            if let Some(val) = scope.get(&name.get_lexeme()) {
+                return Ok(val.clone());
+            }
         }
 
         Err(RuntimeErr::UndefinedVariable(name.get_lexeme(), name.get_line()).to_err())
     }
 
     pub fn assign(&mut self, name: Token, value: Literal) -> Result<(), Err> {
-        if self.values.contains_key(&name.get_lexeme()) {
-            self.values.insert(name.get_lexeme(), value);
-            return Ok(());
-        }
-
-        if let Some(ref mut enclosing) = self.enclosing {
-            enclosing.assign(name, value)?;
-            return Ok(());
+        for scope in self.scopes.iter_mut().rev() {
+            if scope.contains_key(&name.get_lexeme()) {
+                scope.insert(name.get_lexeme(), value);
+                return Ok(());
+            }
         }
 
         Err(RuntimeErr::UndefinedVariable(name.get_lexeme(), name.get_line()).to_err())
+    }
+
+    pub fn push_scope(&mut self) {
+        self.scopes.push(HashMap::new());
+    }
+
+    pub fn pop_scope(&mut self) {
+        self.scopes.pop();
     }
 }

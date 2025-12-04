@@ -168,10 +168,8 @@ impl Interpreter {
         }
     }
 
-    fn execute_block(&mut self, stmts: Vec<Stmt>, env: Environment) -> Result<(), Err> {
-        let prev_env = self.env.clone();
-
-        self.env = env;
+    fn execute_block(&mut self, stmts: Vec<Stmt>) -> Result<(), Err> {
+        self.env.push_scope();
 
         for stmt in stmts {
             if let Err(some) = self.execute(stmt) {
@@ -180,7 +178,7 @@ impl Interpreter {
             }
         }
 
-        self.env = prev_env;
+        self.env.pop_scope();
 
         Ok(())
     }
@@ -190,9 +188,7 @@ impl Interpreter {
             Stmt::Expression(expr) => self.expr_statement(expr),
             Stmt::Print(val) => self.print_statement(val),
             Stmt::Var(var_stmt) => self.var_statement(var_stmt),
-            Stmt::Block(stmts) => {
-                self.execute_block(stmts, Environment::new(Some(self.env.clone())))
-            }
+            Stmt::Block(stmts) => self.execute_block(stmts),
             Stmt::If(if_stmt) => self.if_statement(if_stmt),
         }
     }
@@ -278,7 +274,7 @@ mod tests {
 
     #[test]
     fn test_print_statement() {
-        let res = run_src("print \"Hello, World!\";");
+        let res = run_src("print \"Hello, World! from tests\";");
         assert!(res.is_ok(), "Print statement should execute successfully");
     }
 
