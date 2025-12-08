@@ -17,6 +17,7 @@ pub enum Stmt {
 pub enum Expr {
     Assign(Assignment),
     Binary(Binary),
+    Logical(Logical),
     Grouping(Grouping),
     Literal(Literal),
     Unary(Unary),
@@ -52,6 +53,13 @@ pub struct Assignment {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Binary {
+    pub left: Box<Expr>,
+    pub operator: Token,
+    pub right: Box<Expr>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Logical {
     pub left: Box<Expr>,
     pub operator: Token,
     pub right: Box<Expr>,
@@ -103,6 +111,12 @@ impl Into<Expr> for Assignment {
 impl Into<Expr> for Binary {
     fn into(self) -> Expr {
         Expr::Binary(self)
+    }
+}
+
+impl Into<Expr> for Logical {
+    fn into(self) -> Expr {
+        Expr::Logical(self)
     }
 }
 
@@ -165,6 +179,16 @@ impl Assignment {
 }
 
 impl Binary {
+    pub fn new(left: Expr, operator: Token, right: Expr) -> Self {
+        Self {
+            left: Box::new(left),
+            operator,
+            right: Box::new(right),
+        }
+    }
+}
+
+impl Logical {
     pub fn new(left: Expr, operator: Token, right: Expr) -> Self {
         Self {
             left: Box::new(left),
@@ -241,6 +265,15 @@ impl Expr {
                     operator,
                     right,
                 } = binary;
+
+                AstPrinter::parenthesize(&operator.get_lexeme(), vec![left, right])
+            }
+            Expr::Logical(logical) => {
+                let Logical {
+                    left,
+                    operator,
+                    right,
+                } = logical;
 
                 AstPrinter::parenthesize(&operator.get_lexeme(), vec![left, right])
             }

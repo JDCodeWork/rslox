@@ -1,6 +1,6 @@
 use crate::{
     errors::{Err, ParseErr, RuntimeErr},
-    lox::ast::{Assignment, IfStmt, Stmt, VarStmt},
+    lox::ast::{Assignment, IfStmt, Logical, Stmt, VarStmt},
 };
 
 use super::{
@@ -120,7 +120,7 @@ impl Parser {
     }
 
     fn assignment(&mut self) -> Result<Expr, Err> {
-        let expr = self.equality()?;
+        let expr = self.logic_or()?;
 
         if !self.match_token(&[Equal]) {
             return Ok(expr);
@@ -133,6 +133,32 @@ impl Parser {
         } else {
             Err(RuntimeErr::InvalidAssignment.to_err())
         }
+    }
+
+    fn logic_or(&mut self) -> Result<Expr, Err> {
+        let mut expr = self.logic_and()?;
+
+        while self.match_token(&[Or]) {
+            let op = self.previous().clone();
+            let right = self.logic_and()?;
+
+            expr = Logical::new(expr, op, right).into();
+        }
+
+        Ok(expr)
+    }
+
+    fn logic_and(&mut self) -> Result<Expr, Err> {
+        let mut expr = self.equality()?;
+
+        while self.match_token(&[And]) {
+            let op = self.previous().clone();
+            let right = self.equality()?;
+
+            expr = Logical::new(expr, op, right).into();
+        }
+
+        Ok(expr)
     }
 
     fn equality(&mut self) -> Result<Expr, Err> {

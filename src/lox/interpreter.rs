@@ -1,5 +1,7 @@
 use crate::errors::{Err, RuntimeErr};
-use crate::lox::ast::{Assignment, Binary, Expr, Grouping, IfStmt, Literal, Stmt, Unary, VarStmt};
+use crate::lox::ast::{
+    Assignment, Binary, Expr, Grouping, IfStmt, Literal, Logical, Stmt, Unary, VarStmt,
+};
 use crate::lox::env::Environment;
 use crate::lox::token::*;
 
@@ -121,6 +123,20 @@ impl Interpreter {
         }
     }
 
+    fn logical_expr(&mut self, logical: Logical) -> Result<Literal, Err> {
+        let left = self.evaluate(*logical.left)?;
+
+        if *logical.operator.get_type() == TokenType::Or {
+            if Self::is_truthy(left.clone())? {
+                return Ok(left);
+            }
+        } else if !Self::is_truthy(left.clone())? {
+            return Ok(left);
+        }
+
+        Ok(self.evaluate(*logical.right)?)
+    }
+
     fn unary_expr(&mut self, unary: Unary) -> Result<Literal, Err> {
         let right = self.evaluate(*unary.right)?;
 
@@ -165,6 +181,7 @@ impl Interpreter {
             Expr::Unary(unary) => self.unary_expr(unary),
             Expr::Var(name) => self.var_expr(name),
             Expr::Assign(assign) => self.assign_expr(assign),
+            Expr::Logical(logical) => self.logical_expr(logical),
         }
     }
 
@@ -458,5 +475,23 @@ mod tests {
             .get(token_a)
             .expect("variable lookup failed");
         assert_eq!(val_a, Literal::Number(3.0));
+    }
+
+    #[test]
+    fn test_logical_or() {
+        let result = eval_expr("print 2 or \"hi\";").expect("evaluation failed");
+        assert_eq!(result, Literal::Number(2.0));
+
+        let result = eval_expr("print nil or \"hi\";").expect("evaluation failed");
+        assert_eq!(result, Literal::String("hi".to_string()));
+    }
+
+    #[test]
+    fn test_logical_and() {
+        let result = eval_expr("print \"hi\" and 2;").expect("evaluation failed");
+        assert_eq!(result, Literal::Number(2.0));
+
+        let result = eval_expr("print nil and \"hi\";").expect("evaluation failed");
+        assert_eq!(result, Literal::Nil);
     }
 }
