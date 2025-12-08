@@ -114,6 +114,11 @@ impl Into<Stmt> for WhileStmt {
         Stmt::While(self)
     }
 }
+impl Into<Stmt> for Expr {
+    fn into(self) -> Stmt {
+        Stmt::Expression(self)
+    }
+}
 
 impl Into<Expr> for Assignment {
     fn into(self) -> Expr {

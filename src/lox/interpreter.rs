@@ -527,4 +527,26 @@ mod tests {
             .expect("variable lookup failed");
         assert_eq!(val_a, Literal::Number(3.0));
     }
+
+    #[test]
+    fn test_for_loop() {
+        let mut interpreter = Interpreter::default();
+        let src = "
+            var a = 0;
+            for (var i = 0; i < 3; i = i + 1) {
+                a = a + i;
+            }
+        ";
+        let stmts = parse_stmts(src);
+        for stmt in stmts {
+            interpreter.execute(stmt).expect("execution failed");
+        }
+
+        let token_a = Token::new(TokenType::Identifier, "a".to_string(), 1);
+        let val_a = interpreter
+            .env
+            .get(token_a)
+            .expect("variable lookup failed");
+        assert_eq!(val_a, Literal::Number(3.0));
+    }
 }

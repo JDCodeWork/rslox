@@ -35,7 +35,10 @@ impl Parser {
 
     fn declaration(&mut self) -> Result<Stmt, Err> {
         let stmt = match *self.peek().get_type() {
-            Var => self.var_dec(),
+            Var => {
+                self.advance();
+                self.var_dec()
+            }
             _ => self.statement(),
         };
 
@@ -48,7 +51,6 @@ impl Parser {
     }
 
     fn var_dec(&mut self) -> Result<Stmt, Err> {
-        self.advance();
         let name = self.consume(Identifier, "Expected a variable name")?;
 
         let mut init = Literal::Nil.into();
@@ -66,6 +68,7 @@ impl Parser {
             LeftBrace => self.block_stmt(),
             If => self.if_stmt(),
             While => self.while_stmt(),
+            For => self.for_stmt(),
             _ => self.expr_stmt(),
         }
     }
@@ -79,6 +82,49 @@ impl Parser {
         let body = self.statement()?;
 
         Ok(WhileStmt::new(condition, body).into())
+    }
+
+    fn for_stmt(&mut self) -> Result<Stmt, Err> {
+        self.advance();
+
+        self.consume(LeftParen, "Expect '(' after 'for'.")?;
+
+        let initializer: Stmt;
+        if self.match_token(&[Semicolon]) {
+            initializer = Literal::Nil.into();
+        } else if self.match_token(&[Var]) {
+            initializer = self.var_dec()?;
+        } else {
+            initializer = self.expression()?.into();
+        }
+
+        let condition: Expr;
+        if self.match_token(&[Semicolon]) {
+            condition = Literal::Boolean(true).into();
+        } else {
+            condition = self.expression()?;
+        }
+        self.consume(Semicolon, "Expect ';' after a loop condition.")?;
+
+        let increment: Stmt;
+        if self.match_token(&[RightParen]) {
+            increment = Literal::Nil.into();
+        } else {
+            increment = self.expression()?.into();
+        }
+        self.consume(RightParen, "Expect ')' after for clauses.")?;
+
+        let mut body = self.statement()?;
+        if increment != Literal::Nil.into() {
+            body = Stmt::Block(vec![body, increment]);
+        }
+
+        let mut stmt = WhileStmt::new(condition, body).into();
+        if initializer != Literal::Nil.into() {
+            stmt = Stmt::Block(vec![initializer, stmt]);
+        }
+
+        Ok(stmt)
     }
 
     fn if_stmt(&mut self) -> Result<Stmt, Err> {
