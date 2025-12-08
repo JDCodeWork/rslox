@@ -6,11 +6,12 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com).
 
 ---
 
-## [Unreleased]
+## [0.8.0] - 2025-12-07
 
 ### Added
 
 - Interpretation and parsing for control flow statements: `while`, `for`, and `if-else`.
+- Logical operators: `and` and `or` with short-circuit evaluation.
 
 ## [0.7.0] - 2025-11-19
 

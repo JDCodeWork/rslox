@@ -108,7 +108,7 @@ Literals are stored directly in `TokenType` as `String(String)` and `Number(f64)
 
 ---
 
-## 🌳 Parser Status
+## 🌳 Interpreter Status
 
 Features:
 
@@ -117,12 +117,13 @@ Features:
 - Grouping via `(...)`
 - Literals: numbers, strings, `true`, `false`, `nil`
 - AST generation (printed in Lisp-like form)
+- **Evaluation**: Tree-walk interpreter
+- **Control Flow**: `if-else`, `while`, `for`
+- **Logical Operators**: `and`, `or`
+- **Statements**: `print`, blocks, variable declarations
 
 (temporal) Limitations:
 
-- No evaluation yet
-- No logical operators (`and` / `or`)
-- No statements / declarations / control flow
 - No functions or classes
 
 ---
