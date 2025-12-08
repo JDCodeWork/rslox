@@ -1,6 +1,6 @@
 use crate::errors::{Err, RuntimeErr};
 use crate::lox::ast::{
-    Assignment, Binary, Expr, Grouping, IfStmt, Literal, Logical, Stmt, Unary, VarStmt,
+    Assignment, Binary, Expr, Grouping, IfStmt, Literal, Logical, Stmt, Unary, VarStmt, WhileStmt,
 };
 use crate::lox::env::Environment;
 use crate::lox::token::*;
@@ -35,6 +35,16 @@ impl Interpreter {
         let value = self.evaluate(var_stmt.val)?;
 
         self.env.define(var_stmt.name.get_lexeme(), value);
+        Ok(())
+    }
+
+    fn while_statement(&mut self, while_stmt: WhileStmt) -> Result<(), Err> {
+        let WhileStmt { condition, body } = while_stmt;
+
+        while Self::is_truthy(self.evaluate(condition.clone())?)? {
+            self.execute(*body.clone())?;
+        }
+
         Ok(())
     }
 
@@ -207,6 +217,7 @@ impl Interpreter {
             Stmt::Var(var_stmt) => self.var_statement(var_stmt),
             Stmt::Block(stmts) => self.execute_block(stmts),
             Stmt::If(if_stmt) => self.if_statement(if_stmt),
+            Stmt::While(while_stmt) => self.while_statement(while_stmt),
         }
     }
 }
@@ -493,5 +504,27 @@ mod tests {
 
         let result = eval_expr("print nil and \"hi\";").expect("evaluation failed");
         assert_eq!(result, Literal::Nil);
+    }
+
+    #[test]
+    fn test_while_statement() {
+        let mut interpreter = Interpreter::default();
+        let src = "
+            var a = 1;
+            while (a < 3) {
+                a = a + 1;
+            }
+        ";
+        let stmts = parse_stmts(src);
+        for stmt in stmts {
+            interpreter.execute(stmt).expect("execution failed");
+        }
+
+        let token_a = Token::new(TokenType::Identifier, "a".to_string(), 1);
+        let val_a = interpreter
+            .env
+            .get(token_a)
+            .expect("variable lookup failed");
+        assert_eq!(val_a, Literal::Number(3.0));
     }
 }

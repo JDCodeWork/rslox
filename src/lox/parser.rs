@@ -1,6 +1,6 @@
 use crate::{
     errors::{Err, ParseErr, RuntimeErr},
-    lox::ast::{Assignment, IfStmt, Logical, Stmt, VarStmt},
+    lox::ast::{Assignment, IfStmt, Logical, Stmt, VarStmt, WhileStmt},
 };
 
 use super::{
@@ -65,8 +65,20 @@ impl Parser {
             Print => self.print_stmt(),
             LeftBrace => self.block_stmt(),
             If => self.if_stmt(),
+            While => self.while_stmt(),
             _ => self.expr_stmt(),
         }
+    }
+
+    fn while_stmt(&mut self) -> Result<Stmt, Err> {
+        self.advance(); // Consume 'while'
+        self.consume(LeftParen, "Expect '(' after 'while'.")?;
+        let condition = self.expression()?;
+        self.consume(RightParen, "Expect ')' after condition.")?;
+
+        let body = self.statement()?;
+
+        Ok(WhileStmt::new(condition, body).into())
     }
 
     fn if_stmt(&mut self) -> Result<Stmt, Err> {

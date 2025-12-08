@@ -10,6 +10,7 @@ pub enum Stmt {
     Print(Expr),
     Var(VarStmt),
     If(IfStmt),
+    While(WhileStmt),
     Block(Vec<Stmt>),
 }
 
@@ -40,6 +41,12 @@ pub struct IfStmt {
 pub struct VarStmt {
     pub name: Token,
     pub val: Expr,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct WhileStmt {
+    pub condition: Expr,
+    pub body: Box<Stmt>,
 }
 
 // endregion
@@ -99,6 +106,12 @@ impl Into<Stmt> for IfStmt {
 impl Into<Stmt> for VarStmt {
     fn into(self) -> Stmt {
         Stmt::Var(self)
+    }
+}
+
+impl Into<Stmt> for WhileStmt {
+    fn into(self) -> Stmt {
+        Stmt::While(self)
     }
 }
 
@@ -169,6 +182,15 @@ impl VarStmt {
     }
 }
 
+impl WhileStmt {
+    pub fn new(cond: Expr, body: Stmt) -> Self {
+        Self {
+            condition: cond,
+            body: Box::new(body),
+        }
+    }
+}
+
 impl Assignment {
     pub fn new(name: Token, initializer: Expr) -> Self {
         Self {
@@ -228,6 +250,13 @@ impl Stmt {
                     "(var {} = {})",
                     var_stmt.name.to_string(),
                     var_stmt.val.print()
+                )
+            }
+            Stmt::While(while_stmt) => {
+                format!(
+                    "(while {} = {})",
+                    while_stmt.condition.print(),
+                    while_stmt.body.print()
                 )
             }
             Stmt::Block(stmts) => {
