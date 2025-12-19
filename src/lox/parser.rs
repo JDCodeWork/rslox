@@ -1,10 +1,10 @@
 use crate::{
     errors::{Err, ParseErr, RuntimeErr},
-    lox::ast::{Assignment, IfStmt, Logical, Stmt, VarStmt, WhileStmt},
+    lox::ast::{AssignmentExpr, CallExpr, IfStmt, LogicalExpr, Stmt, VarStmt, WhileStmt},
 };
 
 use super::{
-    ast::{Binary, Expr, Grouping, Literal, Unary},
+    ast::{BinaryExpr, Expr, GroupingExpr, LiteralExpr, Unary},
     token::{
         Token,
         TokenType::{self, *},
@@ -53,7 +53,7 @@ impl Parser {
     fn var_dec(&mut self) -> Result<Stmt, Err> {
         let name = self.consume(Identifier, "Expected a variable name")?;
 
-        let mut init = Literal::Nil.into();
+        let mut init = LiteralExpr::Nil.into();
         if self.match_token(&[Equal]) {
             init = self.expression()?;
         }
@@ -91,7 +91,7 @@ impl Parser {
 
         let initializer: Stmt;
         if self.match_token(&[Semicolon]) {
-            initializer = Literal::Nil.into();
+            initializer = LiteralExpr::Nil.into();
         } else if self.match_token(&[Var]) {
             initializer = self.var_dec()?;
         } else {
@@ -100,7 +100,7 @@ impl Parser {
 
         let condition: Expr;
         if self.match_token(&[Semicolon]) {
-            condition = Literal::Boolean(true).into();
+            condition = LiteralExpr::Boolean(true).into();
         } else {
             condition = self.expression()?;
         }
@@ -108,19 +108,19 @@ impl Parser {
 
         let increment: Stmt;
         if self.match_token(&[RightParen]) {
-            increment = Literal::Nil.into();
+            increment = LiteralExpr::Nil.into();
         } else {
             increment = self.expression()?.into();
         }
         self.consume(RightParen, "Expect ')' after for clauses.")?;
 
         let mut body = self.statement()?;
-        if increment != Literal::Nil.into() {
+        if increment != LiteralExpr::Nil.into() {
             body = Stmt::Block(vec![body, increment]);
         }
 
         let mut stmt = WhileStmt::new(condition, body).into();
-        if initializer != Literal::Nil.into() {
+        if initializer != LiteralExpr::Nil.into() {
             stmt = Stmt::Block(vec![initializer, stmt]);
         }
 
@@ -136,7 +136,7 @@ impl Parser {
 
         let then_b = self.statement()?;
 
-        let mut else_b: Stmt = Literal::Nil.into();
+        let mut else_b: Stmt = LiteralExpr::Nil.into();
         if self.match_token(&[Else]) {
             else_b = self.statement()?;
         }
@@ -187,7 +187,7 @@ impl Parser {
         let val = self.assignment()?;
 
         if let Expr::Var(name) = expr {
-            Ok(Assignment::new(name, val).into())
+            Ok(AssignmentExpr::new(name, val).into())
         } else {
             Err(RuntimeErr::InvalidAssignment.to_err())
         }
@@ -200,7 +200,7 @@ impl Parser {
             let op = self.previous().clone();
             let right = self.logic_and()?;
 
-            expr = Logical::new(expr, op, right).into();
+            expr = LogicalExpr::new(expr, op, right).into();
         }
 
         Ok(expr)
@@ -213,7 +213,7 @@ impl Parser {
             let op = self.previous().clone();
             let right = self.equality()?;
 
-            expr = Logical::new(expr, op, right).into();
+            expr = LogicalExpr::new(expr, op, right).into();
         }
 
         Ok(expr)
@@ -226,7 +226,7 @@ impl Parser {
             let operator = self.previous().clone();
             let right = self.comparison()?;
 
-            expression = Binary::new(expression, operator, right).into();
+            expression = BinaryExpr::new(expression, operator, right).into();
         }
 
         Ok(expression)
@@ -239,7 +239,7 @@ impl Parser {
             let operator = self.previous().clone();
             let right = self.term()?;
 
-            expression = Binary::new(expression, operator, right).into()
+            expression = BinaryExpr::new(expression, operator, right).into()
         }
 
         Ok(expression)
@@ -252,7 +252,7 @@ impl Parser {
             let operator = self.previous().clone();
             let right = self.factor()?;
 
-            expression = Binary::new(expression, operator, right).into()
+            expression = BinaryExpr::new(expression, operator, right).into()
         }
 
         Ok(expression)
@@ -265,7 +265,7 @@ impl Parser {
             let operator = self.previous().clone();
             let right = self.unary()?;
 
-            expression = Binary::new(expression, operator, right).into()
+            expression = BinaryExpr::new(expression, operator, right).into()
         }
 
         Ok(expression)
@@ -278,8 +278,48 @@ impl Parser {
 
             Ok(Unary::new(operator, right).into())
         } else {
-            self.primary()
+            self.call()
         }
+    }
+
+    fn call(&mut self) -> Result<Expr, Err> {
+        let mut expr = self.primary()?;
+
+        loop {
+            if self.match_token(&[LeftParen]) {
+                expr = self.finish_call(expr)?;
+            } else {
+                break;
+            }
+        }
+
+        Ok(expr)
+    }
+
+    fn finish_call(&mut self, callee: Expr) -> Result<Expr, Err> {
+        let mut args = Vec::new();
+
+        if !self.check(&RightParen) {
+            loop {
+                if args.len() >= 255 {
+                    ParseErr::TooManyArguments(callee.clone().print(), self.peek().get_line())
+                        .into_err()
+                        .report();
+                }
+
+                args.push(self.expression()?);
+
+                if !self.match_token(&[Comma]) {
+                    break;
+                }
+            }
+        }
+
+        let paren = self.consume(RightParen, "Expected ')' after arguments.")?;
+
+        let call_expr = CallExpr::new(callee, paren, args);
+
+        Ok(call_expr.into())
     }
 
     fn primary(&mut self) -> Result<Expr, Err> {
@@ -288,23 +328,23 @@ impl Parser {
         let expression = match token_type {
             False => {
                 self.advance();
-                Literal::Boolean(false).into()
+                LiteralExpr::Boolean(false).into()
             }
             True => {
                 self.advance();
-                Literal::Boolean(true).into()
+                LiteralExpr::Boolean(true).into()
             }
             Nil => {
                 self.advance();
-                Literal::Nil.into()
+                LiteralExpr::Nil.into()
             }
             Number(num) => {
                 self.advance();
-                Literal::Number(num).into()
+                LiteralExpr::Number(num).into()
             }
             String(str) => {
                 self.advance();
-                Literal::String(str).into()
+                LiteralExpr::String(str).into()
             }
             LeftParen => {
                 self.advance();
@@ -312,10 +352,10 @@ impl Parser {
 
                 self.consume(RightParen, "Expect ')' after expression.")?;
 
-                Grouping::new(expr).into()
+                GroupingExpr::new(expr).into()
             }
             Identifier => Expr::Var(self.advance().clone()),
-            _ => return Err(ParseErr::UnexpectedEOF(self.current).to_err()),
+            _ => return Err(ParseErr::UnexpectedEOF(self.current).into_err()),
         };
         Ok(expression)
     }
@@ -374,7 +414,7 @@ impl Parser {
             return Ok(self.advance().clone());
         };
 
-        Err(ParseErr::ExpectedToken(error.to_string(), self.current).to_err())
+        Err(ParseErr::ExpectedToken(error.to_string(), self.current).into_err())
     }
 
     fn synchronize(&mut self) {

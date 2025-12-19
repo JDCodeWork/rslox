@@ -1,4 +1,4 @@
-use crate::tools::AstPrinter;
+use crate::{errors::Err, lox::interpreter::Interpreter, tools::AstPrinter};
 
 use super::token::Token;
 
@@ -16,13 +16,20 @@ pub enum Stmt {
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum Expr {
-    Assign(Assignment),
-    Binary(Binary),
-    Logical(Logical),
-    Grouping(Grouping),
-    Literal(Literal),
+    Assign(AssignmentExpr),
+    Binary(BinaryExpr),
+    Logical(LogicalExpr),
+    Grouping(GroupingExpr),
+    Literal(LiteralExpr),
     Unary(Unary),
     Var(Token),
+    Call(CallExpr),
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum Callable {
+    User(UserFn),
+    Native(NativeFn),
 }
 
 // endregion
@@ -52,37 +59,59 @@ pub struct WhileStmt {
 // endregion
 
 // region: Expr structures
+
 #[derive(Debug, PartialEq, Clone)]
-pub struct Assignment {
+pub struct AssignmentExpr {
     pub name: Token,
     pub value: Box<Expr>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Binary {
+pub struct UserFn {
+    pub callee: Box<Expr>,
+    pub paren: Token,
+    pub args: Vec<Expr>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct NativeFn {
+    pub arity: u8,
+    pub action: fn(&mut Interpreter, Vec<LiteralExpr>) -> Result<LiteralExpr, Err>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct CallExpr {
+    pub callee: Box<Expr>,
+    pub paren: Token,
+    pub args: Vec<Expr>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct BinaryExpr {
     pub left: Box<Expr>,
     pub operator: Token,
     pub right: Box<Expr>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Logical {
+pub struct LogicalExpr {
     pub left: Box<Expr>,
     pub operator: Token,
     pub right: Box<Expr>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Grouping {
+pub struct GroupingExpr {
     pub expression: Box<Expr>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Literal {
+pub enum LiteralExpr {
     Nil,
     Boolean(bool),
     Number(f64),
     String(String),
+    Call(Callable),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -96,7 +125,6 @@ pub struct Unary {
 // endregion
 
 // region: Into trait implementation
-
 impl Into<Stmt> for IfStmt {
     fn into(self) -> Stmt {
         Stmt::If(self)
@@ -120,25 +148,31 @@ impl Into<Stmt> for Expr {
     }
 }
 
-impl Into<Expr> for Assignment {
+impl Into<Expr> for CallExpr {
+    fn into(self) -> Expr {
+        Expr::Call(self)
+    }
+}
+
+impl Into<Expr> for AssignmentExpr {
     fn into(self) -> Expr {
         Expr::Assign(self)
     }
 }
 
-impl Into<Expr> for Binary {
+impl Into<Expr> for BinaryExpr {
     fn into(self) -> Expr {
         Expr::Binary(self)
     }
 }
 
-impl Into<Expr> for Logical {
+impl Into<Expr> for LogicalExpr {
     fn into(self) -> Expr {
         Expr::Logical(self)
     }
 }
 
-impl Into<Expr> for Grouping {
+impl Into<Expr> for GroupingExpr {
     fn into(self) -> Expr {
         Expr::Grouping(self)
     }
@@ -150,15 +184,27 @@ impl Into<Expr> for Unary {
     }
 }
 
-impl Into<Expr> for Literal {
+impl Into<Expr> for LiteralExpr {
     fn into(self) -> Expr {
         Expr::Literal(self)
     }
 }
 
-impl Into<Stmt> for Literal {
+impl Into<Stmt> for LiteralExpr {
     fn into(self) -> Stmt {
         Stmt::Expression(self.into())
+    }
+}
+
+impl Into<LiteralExpr> for Callable {
+    fn into(self) -> LiteralExpr {
+        LiteralExpr::Call(self)
+    }
+}
+
+impl Into<LiteralExpr> for NativeFn {
+    fn into(self) -> LiteralExpr {
+        LiteralExpr::Call(Callable::Native(self))
     }
 }
 
@@ -196,7 +242,36 @@ impl WhileStmt {
     }
 }
 
-impl Assignment {
+impl UserFn {
+    pub fn new(callee: Expr, paren: Token, args: Vec<Expr>) -> Self {
+        Self {
+            callee: Box::new(callee),
+            paren,
+            args,
+        }
+    }
+}
+
+impl NativeFn {
+    pub fn new(
+        arity: u8,
+        action: fn(&mut Interpreter, Vec<LiteralExpr>) -> Result<LiteralExpr, Err>,
+    ) -> Self {
+        Self { arity, action }
+    }
+}
+
+impl CallExpr {
+    pub fn new(callee: Expr, paren: Token, args: Vec<Expr>) -> Self {
+        Self {
+            callee: Box::new(callee),
+            paren,
+            args,
+        }
+    }
+}
+
+impl AssignmentExpr {
     pub fn new(name: Token, initializer: Expr) -> Self {
         Self {
             name,
@@ -205,7 +280,7 @@ impl Assignment {
     }
 }
 
-impl Binary {
+impl BinaryExpr {
     pub fn new(left: Expr, operator: Token, right: Expr) -> Self {
         Self {
             left: Box::new(left),
@@ -215,7 +290,7 @@ impl Binary {
     }
 }
 
-impl Logical {
+impl LogicalExpr {
     pub fn new(left: Expr, operator: Token, right: Expr) -> Self {
         Self {
             left: Box::new(left),
@@ -225,7 +300,7 @@ impl Logical {
     }
 }
 
-impl Grouping {
+impl GroupingExpr {
     pub fn new(expression: Expr) -> Self {
         Self {
             expression: Box::new(expression),
@@ -290,11 +365,73 @@ impl Stmt {
     }
 }
 
+impl Callable {
+    pub fn print(self) -> String {
+        match self {
+            Callable::User(func) => {
+                // Print callee concisely: if it's a simple variable, use its lexeme;
+                // otherwise use the expression's print but strip a leading "call "
+                let callee_repr = match *func.callee {
+                    Expr::Var(token) => token.get_lexeme().to_string(),
+                    other => {
+                        let s = other.print();
+                        // strip a leading "call " that Expr::print may add for nested calls
+                        if let Some(stripped) = s.strip_prefix("call ") {
+                            stripped.to_string()
+                        } else {
+                            s
+                        }
+                    }
+                };
+
+                let printed_args: Vec<String> =
+                    func.args.into_iter().map(|arg| arg.print()).collect();
+                let args = printed_args.join(", ");
+                if args.is_empty() {
+                    format!("{}()", callee_repr)
+                } else {
+                    format!("{}({})", callee_repr, args)
+                }
+            }
+            Callable::Native(_) => "<native>()".to_string(),
+        }
+    }
+}
 impl Expr {
     pub fn print(self) -> String {
         match self {
+            Expr::Call(call_expr) => {
+                let CallExpr {
+                    callee,
+                    paren: _,
+                    args,
+                } = call_expr;
+
+                // Print callee concisely: if it's a simple variable, use its lexeme;
+                // otherwise use the expression's print but strip a leading "call "
+                let callee_repr = match *callee {
+                    Expr::Var(token) => token.get_lexeme().to_string(),
+                    other => {
+                        let s = other.print();
+                        // strip a leading "call " that nested call printing may add
+                        if let Some(stripped) = s.strip_prefix("call ") {
+                            stripped.to_string()
+                        } else {
+                            s
+                        }
+                    }
+                };
+
+                let printed_args: Vec<String> = args.into_iter().map(|arg| arg.print()).collect();
+                let args = printed_args.join(", ");
+                if args.is_empty() {
+                    format!("call {}()", callee_repr)
+                } else {
+                    format!("call {}({})", callee_repr, args)
+                }
+            }
             Expr::Binary(binary) => {
-                let Binary {
+                let BinaryExpr {
                     left,
                     operator,
                     right,
@@ -303,7 +440,7 @@ impl Expr {
                 AstPrinter::parenthesize(&operator.get_lexeme(), vec![left, right])
             }
             Expr::Logical(logical) => {
-                let Logical {
+                let LogicalExpr {
                     left,
                     operator,
                     right,
@@ -313,10 +450,11 @@ impl Expr {
             }
             Expr::Grouping(group) => AstPrinter::parenthesize("group", vec![group.expression]),
             Expr::Literal(val) => match val {
-                Literal::Nil => "nil".to_string(),
-                Literal::Boolean(bool) => bool.to_string(),
-                Literal::Number(num) => num.to_string(),
-                Literal::String(str) => str.to_string(),
+                LiteralExpr::Nil => "nil".to_string(),
+                LiteralExpr::Boolean(bool) => bool.to_string(),
+                LiteralExpr::Number(num) => num.to_string(),
+                LiteralExpr::String(str) => str.to_string(),
+                LiteralExpr::Call(call_expr) => call_expr.print(),
             },
             Expr::Unary(unary) => {
                 let Unary { operator, right } = unary;

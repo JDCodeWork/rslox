@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     errors::{Err, RuntimeErr},
-    lox::{ast::Literal, token::Token},
+    lox::{ast::LiteralExpr, token::Token},
 };
 
 /**
@@ -21,7 +21,7 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub struct Environment {
-    scopes: Vec<HashMap<String, Literal>>,
+    scopes: Vec<HashMap<String, LiteralExpr>>,
 }
 
 impl Default for Environment {
@@ -33,13 +33,13 @@ impl Default for Environment {
 }
 
 impl Environment {
-    pub fn define(&mut self, name: String, value: Literal) {
+    pub fn define(&mut self, name: String, value: LiteralExpr) {
         if let Some(scope) = self.scopes.last_mut() {
             scope.insert(name, value);
         }
     }
 
-    pub fn get(&self, name: Token) -> Result<Literal, Err> {
+    pub fn get(&self, name: Token) -> Result<LiteralExpr, Err> {
         for scope in self.scopes.iter() {
             if let Some(val) = scope.get(&name.get_lexeme()) {
                 return Ok(val.clone());
@@ -49,7 +49,7 @@ impl Environment {
         Err(RuntimeErr::UndefinedVariable(name.get_lexeme(), name.get_line()).to_err())
     }
 
-    pub fn assign(&mut self, name: Token, value: Literal) -> Result<(), Err> {
+    pub fn assign(&mut self, name: Token, value: LiteralExpr) -> Result<(), Err> {
         for scope in self.scopes.iter_mut().rev() {
             if scope.contains_key(&name.get_lexeme()) {
                 scope.insert(name.get_lexeme(), value);

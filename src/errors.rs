@@ -50,6 +50,8 @@ pub enum ParseErr {
     ExpectedToken(String, usize),
     #[error("Unexpected end of input.")]
     UnexpectedEOF(usize),
+    #[error("{0} can't have more than 255 arguments.")]
+    TooManyArguments(String, usize),
 }
 
 impl ParseErr {
@@ -57,10 +59,11 @@ impl ParseErr {
         match self {
             ParseErr::ExpectedToken(_, ln) => Some(*ln),
             ParseErr::UnexpectedEOF(ln) => Some(*ln),
+            ParseErr::TooManyArguments(_, ln) => Some(*ln),
         }
     }
 
-    pub fn to_err(self) -> Err {
+    pub fn into_err(self) -> Err {
         Err::Parse(self)
     }
 }
@@ -88,6 +91,10 @@ pub enum RuntimeErr {
     UndefinedVariable(String, usize),
     #[error("Invalid assignment target.")]
     InvalidAssignment,
+    #[error("Can only call functions and classes")]
+    InvalidCalleeExpr,
+    #[error("Expected {0} arguments, but got {1}.")]
+    ArgumentCountMismatch(usize, usize),
 }
 
 impl RuntimeErr {
