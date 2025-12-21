@@ -11,6 +11,7 @@ pub enum Stmt {
     Var(VarStmt),
     If(IfStmt),
     While(WhileStmt),
+    Function(FunStmt),
     Block(Vec<Stmt>),
 }
 
@@ -28,7 +29,7 @@ pub enum Expr {
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum Callable {
-    User(UserFn),
+    User(FunStmt),
     Native(NativeFn),
 }
 
@@ -67,13 +68,13 @@ pub struct AssignmentExpr {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct UserFn {
-    pub callee: Box<Expr>,
-    pub paren: Token,
-    pub args: Vec<Expr>,
+pub struct FunStmt {
+    pub name: Token,
+    pub params: Vec<Token>,
+    pub body: Box<Stmt>,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct NativeFn {
     pub arity: u8,
     pub action: fn(&mut Interpreter, Vec<LiteralExpr>) -> Result<LiteralExpr, Err>,
@@ -125,6 +126,12 @@ pub struct Unary {
 // endregion
 
 // region: Into trait implementation
+impl Into<Stmt> for FunStmt {
+    fn into(self) -> Stmt {
+        Stmt::Function(self)
+    }
+}
+
 impl Into<Stmt> for IfStmt {
     fn into(self) -> Stmt {
         Stmt::If(self)
@@ -196,6 +203,12 @@ impl Into<Stmt> for LiteralExpr {
     }
 }
 
+impl Into<Callable> for FunStmt {
+    fn into(self) -> Callable {
+        Callable::User(self)
+    }
+}
+
 impl Into<LiteralExpr> for Callable {
     fn into(self) -> LiteralExpr {
         LiteralExpr::Call(self)
@@ -242,12 +255,12 @@ impl WhileStmt {
     }
 }
 
-impl UserFn {
-    pub fn new(callee: Expr, paren: Token, args: Vec<Expr>) -> Self {
+impl FunStmt {
+    pub fn new(name: Token, params: Vec<Token>, body: Stmt) -> Self {
         Self {
-            callee: Box::new(callee),
-            paren,
-            args,
+            name,
+            params,
+            body: Box::new(body),
         }
     }
 }
@@ -332,6 +345,18 @@ impl Stmt {
                     var_stmt.val.print()
                 )
             }
+            Stmt::Function(fn_stmt) => {
+                format!(
+                    "(fn {} ({}) {{}})",
+                    fn_stmt.name.get_lexeme(),
+                    fn_stmt
+                        .params
+                        .iter()
+                        .map(|p| p.get_lexeme())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
             Stmt::While(while_stmt) => {
                 format!(
                     "(while {} = {})",
@@ -368,31 +393,7 @@ impl Stmt {
 impl Callable {
     pub fn print(self) -> String {
         match self {
-            Callable::User(func) => {
-                // Print callee concisely: if it's a simple variable, use its lexeme;
-                // otherwise use the expression's print but strip a leading "call "
-                let callee_repr = match *func.callee {
-                    Expr::Var(token) => token.get_lexeme().to_string(),
-                    other => {
-                        let s = other.print();
-                        // strip a leading "call " that Expr::print may add for nested calls
-                        if let Some(stripped) = s.strip_prefix("call ") {
-                            stripped.to_string()
-                        } else {
-                            s
-                        }
-                    }
-                };
-
-                let printed_args: Vec<String> =
-                    func.args.into_iter().map(|arg| arg.print()).collect();
-                let args = printed_args.join(", ");
-                if args.is_empty() {
-                    format!("{}()", callee_repr)
-                } else {
-                    format!("{}({})", callee_repr, args)
-                }
-            }
+            Callable::User(func) => Stmt::Function(func).print(),
             Callable::Native(_) => "<native>()".to_string(),
         }
     }
@@ -474,3 +475,9 @@ impl Expr {
 }
 
 // endregion
+
+impl PartialEq for NativeFn {
+    fn eq(&self, other: &Self) -> bool {
+        self.arity == other.arity
+    }
+}

@@ -1,12 +1,14 @@
+use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::errors::{Err, RuntimeErr};
 use crate::lox::ast::*;
-use crate::lox::env::Environment;
+use crate::lox::env::{Environment, Scope};
 use crate::lox::token::*;
 
 #[derive(Default, Debug)]
 pub struct Interpreter {
+    pub(crate) globals: Scope,
     pub(crate) env: Environment,
 }
 
@@ -24,12 +26,23 @@ impl Interpreter {
         let mut executer = Interpreter::default();
 
         executer
-            .env
-            .define(String::from("clock"), NativeFn::new(0, clock).into());
+            .globals
+            .insert(String::from("clock"), NativeFn::new(0, clock).into());
+
+        executer.env.push_scope(executer.globals.clone());
 
         for stmt in stmts {
             executer.execute(stmt)?;
         }
+
+        Ok(())
+    }
+
+    fn fun_statement(&mut self, fun_stmt: FunStmt) -> Result<(), Err> {
+        let fn_name = fun_stmt.name.get_lexeme();
+
+        let fun: Callable = fun_stmt.into();
+        self.env.define(fn_name, fun.into());
 
         Ok(())
     }
@@ -92,7 +105,9 @@ impl Interpreter {
             );
         }
 
-        Ok(callable.call(self, arguments)?)
+        let val = callable.call(self, arguments)?;
+
+        Ok(val)
     }
 
     fn assign_expr(&mut self, assign: AssignmentExpr) -> Result<LiteralExpr, Err> {
@@ -233,13 +248,16 @@ impl Interpreter {
         }
     }
 
-    fn execute_block(&mut self, stmts: Vec<Stmt>) -> Result<(), Err> {
-        self.env.push_scope();
+    fn execute_block(&mut self, stmts: Vec<Stmt>, scope: Option<Scope>) -> Result<(), Err> {
+        if let Some(sc) = scope {
+            self.env.push_scope(sc);
+        } else {
+            self.env.push_empty_scope();
+        }
 
         for stmt in stmts {
             if let Err(some) = self.execute(stmt) {
-                some.report();
-                break;
+                some.report_and_exit(1);
             }
         }
 
@@ -253,9 +271,10 @@ impl Interpreter {
             Stmt::Expression(expr) => self.expr_statement(expr),
             Stmt::Print(val) => self.print_statement(val),
             Stmt::Var(var_stmt) => self.var_statement(var_stmt),
-            Stmt::Block(stmts) => self.execute_block(stmts),
+            Stmt::Block(stmts) => self.execute_block(stmts, None),
             Stmt::If(if_stmt) => self.if_statement(if_stmt),
             Stmt::While(while_stmt) => self.while_statement(while_stmt),
+            Stmt::Function(fn_) => self.fun_statement(fn_),
         }
     }
 }
@@ -263,7 +282,7 @@ impl Interpreter {
 impl Callable {
     pub fn arity(&self) -> usize {
         match self {
-            Callable::User(fn_) => fn_.args.len(),
+            Callable::User(fn_) => fn_.arity(),
             Callable::Native(fn_) => fn_.arity as usize,
         }
     }
@@ -276,9 +295,23 @@ impl Callable {
     }
 }
 
-impl UserFn {
+impl FunStmt {
     pub fn call(&self, exec: &mut Interpreter, args: Vec<LiteralExpr>) -> Result<LiteralExpr, Err> {
-        todo!()
+        let mut env: Scope = HashMap::new();
+
+        for (param, arg) in self.params.iter().zip(args) {
+            env.insert(param.get_lexeme(), arg);
+        }
+
+        if let Stmt::Block(stmts) = *self.body.clone() {
+            exec.execute_block(stmts, Some(env))?;
+        }
+
+        Ok(LiteralExpr::Nil)
+    }
+
+    pub fn arity(&self) -> usize {
+        self.params.len()
     }
 }
 

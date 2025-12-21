@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-
 use crate::{
     errors::{Err, RuntimeErr},
     lox::{ast::LiteralExpr, token::Token},
@@ -19,9 +18,11 @@ use crate::{
  *
  */
 
+pub type Scope = HashMap<String, LiteralExpr>;
+
 #[derive(Clone, Debug)]
 pub struct Environment {
-    scopes: Vec<HashMap<String, LiteralExpr>>,
+    scopes: Vec<Scope>,
 }
 
 impl Default for Environment {
@@ -60,8 +61,12 @@ impl Environment {
         Err(RuntimeErr::UndefinedVariable(name.get_lexeme(), name.get_line()).to_err())
     }
 
-    pub fn push_scope(&mut self) {
+    pub fn push_empty_scope(&mut self) {
         self.scopes.push(HashMap::new());
+    }
+
+    pub fn push_scope(&mut self, scope: Scope) {
+        self.scopes.push(scope);
     }
 
     pub fn pop_scope(&mut self) {

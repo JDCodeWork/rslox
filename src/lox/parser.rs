@@ -1,6 +1,6 @@
 use crate::{
     errors::{Err, ParseErr, RuntimeErr},
-    lox::ast::{AssignmentExpr, CallExpr, IfStmt, LogicalExpr, Stmt, VarStmt, WhileStmt},
+    lox::ast::{AssignmentExpr, CallExpr, FunStmt, IfStmt, LogicalExpr, Stmt, VarStmt, WhileStmt},
 };
 
 use super::{
@@ -35,6 +35,7 @@ impl Parser {
 
     fn declaration(&mut self) -> Result<Stmt, Err> {
         let stmt = match *self.peek().get_type() {
+            Fun => self.fun_dec("function"),
             Var => {
                 self.advance();
                 self.var_dec()
@@ -50,6 +51,40 @@ impl Parser {
         stmt
     }
 
+    fn fun_dec(&mut self, kind: &str) -> Result<Stmt, Err> {
+        self.advance(); // Consume FUN token
+
+        let name = self.consume(Identifier, format!("Expect {kind} name").as_str())?;
+
+        self.consume(
+            LeftParen,
+            format!("Expected '(' after {kind} name.").as_str(),
+        )?;
+        let mut params = Vec::new();
+
+        // handles the zero parameters case
+        if !self.check(&RightParen) {
+            loop {
+                if params.len() >= 255 {
+                    ParseErr::TooManyArguments(kind.to_string(), name.get_line())
+                        .into_err()
+                        .report();
+                }
+
+                params.push(self.consume(Identifier, "Expect parameter name.")?);
+
+                if !self.match_token(&[Comma]) {
+                    break;
+                }
+            }
+        }
+        self.consume(RightParen, "Expect ')' after parameters.")?;
+
+        let body = self.block_stmt()?;
+
+        Ok(FunStmt::new(name, params, body).into())
+    }
+
     fn var_dec(&mut self) -> Result<Stmt, Err> {
         let name = self.consume(Identifier, "Expected a variable name")?;
 
@@ -63,6 +98,10 @@ impl Parser {
     }
 
     fn statement(&mut self) -> Result<Stmt, Err> {
+        if Print == *self.peek().get_type() {
+            self.peek();
+        }
+
         match *self.peek().get_type() {
             Print => self.print_stmt(),
             LeftBrace => self.block_stmt(),
