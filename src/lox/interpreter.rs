@@ -6,6 +6,12 @@ use crate::lox::ast::*;
 use crate::lox::env::{Environment, Scope};
 use crate::lox::token::*;
 
+#[derive(Debug)]
+pub enum ExecResult {
+    Normal,
+    Return(LiteralExpr),
+}
+
 #[derive(Default, Debug)]
 pub struct Interpreter {
     pub(crate) globals: Scope,
@@ -38,53 +44,69 @@ impl Interpreter {
         Ok(())
     }
 
-    fn fun_statement(&mut self, fun_stmt: FunStmt) -> Result<(), Err> {
+    fn return_statement(&mut self, return_stmt: ReturnStmt) -> Result<ExecResult, Err> {
+        let mut val = LiteralExpr::Nil;
+
+        if return_stmt.value != LiteralExpr::Nil.into() {
+            val = self.evaluate(return_stmt.value)?;
+        }
+
+        Ok(ExecResult::Return(val))
+    }
+
+    fn fun_statement(&mut self, fun_stmt: FunStmt) -> Result<ExecResult, Err> {
         let fn_name = fun_stmt.name.get_lexeme();
 
         let fun: Callable = fun_stmt.into();
         self.env.define(fn_name, fun.into());
 
-        Ok(())
+        Ok(ExecResult::Normal)
     }
 
-    fn if_statement(&mut self, if_stmt: IfStmt) -> Result<(), Err> {
+    fn if_statement(&mut self, if_stmt: IfStmt) -> Result<ExecResult, Err> {
+        let mut result = ExecResult::Normal;
+
         if Self::is_truthy(self.evaluate(if_stmt.condition)?)? {
-            self.execute(*if_stmt.then_b)?;
+            result = self.execute(*if_stmt.then_b)?;
         } else if *if_stmt.else_b != LiteralExpr::Nil.into() {
-            self.execute(*if_stmt.else_b)?;
+            result = self.execute(*if_stmt.else_b)?;
         }
 
-        Ok(())
+        Ok(result)
     }
 
-    fn var_statement(&mut self, var_stmt: VarStmt) -> Result<(), Err> {
+    fn var_statement(&mut self, var_stmt: VarStmt) -> Result<ExecResult, Err> {
         let value = self.evaluate(var_stmt.val)?;
 
         self.env.define(var_stmt.name.get_lexeme(), value);
-        Ok(())
+        Ok(ExecResult::Normal)
     }
 
-    fn while_statement(&mut self, while_stmt: WhileStmt) -> Result<(), Err> {
+    fn while_statement(&mut self, while_stmt: WhileStmt) -> Result<ExecResult, Err> {
         let WhileStmt { condition, body } = while_stmt;
 
         while Self::is_truthy(self.evaluate(condition.clone())?)? {
-            self.execute(*body.clone())?;
+            let result = self.execute(*body.clone())?;
+
+            if let ExecResult::Return(_) = result {
+                return Ok(result);
+            }
         }
 
-        Ok(())
+        Ok(ExecResult::Normal)
     }
 
-    fn expr_statement(&mut self, expr: Expr) -> Result<(), Err> {
+    fn expr_statement(&mut self, expr: Expr) -> Result<ExecResult, Err> {
         self.evaluate(expr)?;
 
-        Ok(())
+        Ok(ExecResult::Normal)
     }
 
-    fn print_statement(&mut self, expr: Expr) -> Result<(), Err> {
+    fn print_statement(&mut self, expr: Expr) -> Result<ExecResult, Err> {
         let val: Expr = self.evaluate(expr)?.into();
         println!("{}", val.print());
 
-        Ok(())
+        Ok(ExecResult::Normal)
     }
 
     fn call_expr(&mut self, call: CallExpr) -> Result<LiteralExpr, Err> {
@@ -248,7 +270,7 @@ impl Interpreter {
         }
     }
 
-    fn execute_block(&mut self, stmts: Vec<Stmt>, scope: Option<Scope>) -> Result<(), Err> {
+    fn execute_block(&mut self, stmts: Vec<Stmt>, scope: Option<Scope>) -> Result<ExecResult, Err> {
         if let Some(sc) = scope {
             self.env.push_scope(sc);
         } else {
@@ -256,17 +278,23 @@ impl Interpreter {
         }
 
         for stmt in stmts {
-            if let Err(some) = self.execute(stmt) {
-                some.report_and_exit(1);
+            let result = match self.execute(stmt) {
+                Ok(res) => res,
+                Err(some) => some.report_and_exit(1),
+            };
+
+            if let ExecResult::Return(_) = result {
+                self.env.pop_scope();
+                return Ok(result);
             }
         }
 
         self.env.pop_scope();
 
-        Ok(())
+        Ok(ExecResult::Normal)
     }
 
-    pub fn execute(&mut self, stmt: Stmt) -> Result<(), Err> {
+    pub fn execute(&mut self, stmt: Stmt) -> Result<ExecResult, Err> {
         match stmt {
             Stmt::Expression(expr) => self.expr_statement(expr),
             Stmt::Print(val) => self.print_statement(val),
@@ -275,6 +303,7 @@ impl Interpreter {
             Stmt::If(if_stmt) => self.if_statement(if_stmt),
             Stmt::While(while_stmt) => self.while_statement(while_stmt),
             Stmt::Function(fn_) => self.fun_statement(fn_),
+            Stmt::Return(return_stmt) => self.return_statement(return_stmt),
         }
     }
 }
@@ -303,11 +332,16 @@ impl FunStmt {
             env.insert(param.get_lexeme(), arg);
         }
 
-        if let Stmt::Block(stmts) = *self.body.clone() {
-            exec.execute_block(stmts, Some(env))?;
-        }
+        let stmts = match *self.body.clone() {
+            Stmt::Block(stmts) => stmts,
+            stmt => vec![stmt],
+        };
 
-        Ok(LiteralExpr::Nil)
+        let ExecResult::Return(val) = exec.execute_block(stmts, Some(env))? else {
+            return Ok(LiteralExpr::Nil);
+        };
+
+        Ok(val)
     }
 
     pub fn arity(&self) -> usize {

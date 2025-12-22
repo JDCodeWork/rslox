@@ -1,6 +1,9 @@
 use crate::{
     errors::{Err, ParseErr, RuntimeErr},
-    lox::ast::{AssignmentExpr, CallExpr, FunStmt, IfStmt, LogicalExpr, Stmt, VarStmt, WhileStmt},
+    lox::ast::{
+        AssignmentExpr, CallExpr, FunStmt, IfStmt, LogicalExpr, ReturnStmt, Stmt, VarStmt,
+        WhileStmt,
+    },
 };
 
 use super::{
@@ -108,8 +111,21 @@ impl Parser {
             If => self.if_stmt(),
             While => self.while_stmt(),
             For => self.for_stmt(),
+            Return => self.return_stmt(),
             _ => self.expr_stmt(),
         }
+    }
+
+    fn return_stmt(&mut self) -> Result<Stmt, Err> {
+        let keyword = self.advance().clone();
+
+        let mut val: Expr = LiteralExpr::Nil.into();
+        if !self.check(&Semicolon) {
+            val = self.expression()?;
+        }
+        self.consume(Semicolon, "Expect ';' after return value.")?;
+
+        Ok(ReturnStmt::new(keyword, val).into())
     }
 
     fn while_stmt(&mut self) -> Result<Stmt, Err> {
@@ -184,7 +200,7 @@ impl Parser {
     }
 
     fn block_stmt(&mut self) -> Result<Stmt, Err> {
-        self.advance(); // Consume '{' token
+        self.consume(LeftBrace, "Expect '{' before block.")?;
 
         let mut stmts = Vec::new();
 

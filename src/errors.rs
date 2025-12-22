@@ -46,7 +46,7 @@ impl ErrorMsg for ScanErr {
 
 #[derive(ThisError, Debug, PartialEq)]
 pub enum ParseErr {
-    #[error("Expect '{0}'.")]
+    #[error("{0}")]
     ExpectedToken(String, usize),
     #[error("Unexpected end of input.")]
     UnexpectedEOF(usize),

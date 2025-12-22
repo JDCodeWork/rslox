@@ -41,7 +41,7 @@ impl Environment {
     }
 
     pub fn get(&self, name: Token) -> Result<LiteralExpr, Err> {
-        for scope in self.scopes.iter() {
+        for scope in self.scopes.iter().rev() {
             if let Some(val) = scope.get(&name.get_lexeme()) {
                 return Ok(val.clone());
             }

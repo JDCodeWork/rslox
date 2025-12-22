@@ -13,6 +13,7 @@ pub enum Stmt {
     While(WhileStmt),
     Function(FunStmt),
     Block(Vec<Stmt>),
+    Return(ReturnStmt),
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -38,6 +39,14 @@ pub enum Callable {
 // region: lower-level structures
 
 // region: Stmt structures
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ReturnStmt {
+    pub keyword: Token,
+    pub value: Expr,
+}
+
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct IfStmt {
     pub condition: Expr,
@@ -126,6 +135,13 @@ pub struct Unary {
 // endregion
 
 // region: Into trait implementation
+
+impl Into<Stmt> for ReturnStmt {
+    fn into(self) -> Stmt {
+        Stmt::Return(self)
+    }
+}
+
 impl Into<Stmt> for FunStmt {
     fn into(self) -> Stmt {
         Stmt::Function(self)
@@ -230,6 +246,13 @@ impl Into<Expr> for Token {
 // endregion
 
 // region: Implementation of new associated function
+
+impl ReturnStmt {
+    pub fn new(keyword: Token, value: Expr) -> Self {
+        Self { keyword, value }
+    }
+}
+
 impl IfStmt {
     pub fn new(cond: Expr, then_b: Stmt, else_b: Stmt) -> Self {
         Self {
@@ -336,6 +359,9 @@ impl Unary {
 impl Stmt {
     pub fn print(self) -> String {
         match self {
+            Stmt::Return(return_stmt) => {
+                format!("(return {})", return_stmt.value.print())
+            }
             Stmt::Expression(expr) => expr.print(),
             Stmt::Print(expr) => format!("(print {})", expr.print()),
             Stmt::Var(var_stmt) => {
