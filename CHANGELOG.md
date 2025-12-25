@@ -6,6 +6,12 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com).
 
 ---
 
+## [Unreleased]
+
+- Function declaration and calling support.
+- Native functions support (e.g., `clock()`).
+- Return statements.
+
 ## [0.8.0] - 2025-12-07
 
 ### Added

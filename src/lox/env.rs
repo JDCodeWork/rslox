@@ -1,75 +1,124 @@
-use std::collections::HashMap;
 use crate::{
     errors::{Err, RuntimeErr},
     lox::{ast::LiteralExpr, token::Token},
 };
+use std::collections::HashMap;
 
 /**
  * Here we have a problem, in Crafting Interpreters, the Environment was implemented using a values map and a pointer to the enclosing environment, that is fine in Java
+ *
  * because it has garbage collection, but in Rust we have to deal with ownership and borrowing rules
  *
- * In my first iteration I tried to implement it similarly to the book using BTreeMap for the values and Option Box<Environment> for the enclosing environment but
- * it didn't work well due to Rust's ownership model.
- *
- *
- * To solve this, a lot of languages would use other techniques like using a property called scopes, which is a stack of maps, also I found that in this context for the
- * variables lookup a HashMap would be more efficient than a BTreeMap, that is because in most cases the number of variables per scope is small and the lookup time for
- * a HashMap is O(1) on average, while for a BTreeMap is O(log n).
+ * To solve this, a lot of languages would use techniques like a property called scopes, which is a stack of maps.
  *
  */
 
-pub type Scope = HashMap<String, LiteralExpr>;
+/**
+ * So over a few time working with the scopes approach, I was trying implemented the function's closure by capturing the current scopes stack when defining the function, and then when calling the function, but it was a mess to manage the scopes stack correctly.
+ *
+ * Due to that, I decided to use the Arena Pattern to manage the Environments, so each Environment will have a reference to its enclosing Environment using an Arena to manage the memory.
+ */
+
+pub type EnvBindings = HashMap<String, LiteralExpr>;
+pub type EnvId = usize;
+
+#[derive(Clone, Debug)]
+pub struct EnvNode {
+    pub values: EnvBindings,
+    pub parent: Option<EnvId>,
+}
 
 #[derive(Clone, Debug)]
 pub struct Environment {
-    scopes: Vec<Scope>,
+    pub nodes: Vec<EnvNode>,
+    pub curr_node: EnvId,
+}
+
+impl EnvNode {
+    pub fn new() -> Self {
+        Self {
+            parent: None,
+            values: HashMap::new(),
+        }
+    }
 }
 
 impl Default for Environment {
     fn default() -> Self {
+        let globals = EnvNode::new();
+
         Self {
-            scopes: vec![HashMap::new()],
+            nodes: vec![globals],
+            curr_node: 0,
         }
     }
 }
 
 impl Environment {
     pub fn define(&mut self, name: String, value: LiteralExpr) {
-        if let Some(scope) = self.scopes.last_mut() {
-            scope.insert(name, value);
-        }
+        let scope = &mut self.nodes[self.curr_node];
+
+        scope.values.insert(name, value);
     }
 
-    pub fn get(&self, name: Token) -> Result<LiteralExpr, Err> {
-        for scope in self.scopes.iter().rev() {
-            if let Some(val) = scope.get(&name.get_lexeme()) {
-                return Ok(val.clone());
+    pub fn get(&self, name: &Token) -> Result<LiteralExpr, Err> {
+        let mut curr_id: Option<EnvId> = Some(self.curr_node);
+
+        while let Some(id) = curr_id {
+            let env = &self.nodes[id];
+
+
+            if let Some(value) = env.values.get(&name.get_lexeme()) {
+                return Ok(value.to_owned());
             }
+
+            curr_id = env.parent;
         }
 
         Err(RuntimeErr::UndefinedVariable(name.get_lexeme(), name.get_line()).to_err())
     }
 
     pub fn assign(&mut self, name: Token, value: LiteralExpr) -> Result<(), Err> {
-        for scope in self.scopes.iter_mut().rev() {
-            if scope.contains_key(&name.get_lexeme()) {
-                scope.insert(name.get_lexeme(), value);
+        let mut curr_id: Option<EnvId> = Some(self.curr_node);
+
+        while let Some(id) = curr_id {
+            let env = &mut self.nodes[id];
+
+            if env.values.contains_key(&name.get_lexeme()) {
+                env.values.insert(name.get_lexeme(), value);
                 return Ok(());
             }
+
+            curr_id = env.parent;
         }
 
         Err(RuntimeErr::UndefinedVariable(name.get_lexeme(), name.get_line()).to_err())
     }
 
-    pub fn push_empty_scope(&mut self) {
-        self.scopes.push(HashMap::new());
+    pub fn push_closure(&mut self, bindings: EnvBindings, parent: EnvId) {
+        let mut new_scope = EnvNode::new();
+        new_scope.parent = Some(parent);
+        new_scope.values = bindings;
+
+        self.nodes.push(new_scope);
+        self.curr_node = self.nodes.len() - 1;
     }
 
-    pub fn push_scope(&mut self, scope: Scope) {
-        self.scopes.push(scope);
+    pub fn push_node(&mut self) {
+        let mut new_scope = EnvNode::new();
+        new_scope.parent = Some(self.curr_node);
+
+        self.nodes.push(new_scope);
+        self.curr_node = self.nodes.len() - 1;
     }
 
-    pub fn pop_scope(&mut self) {
-        self.scopes.pop();
+    pub fn pop_node(&mut self) {
+        let curr_env = &self.nodes[self.curr_node];
+
+        if let Some(parent_id) = curr_env.parent {
+            self.curr_node = parent_id;
+        } else {
+            self.curr_node = 0
+        }
     }
 }

@@ -1,4 +1,8 @@
-use crate::{errors::Err, lox::interpreter::Interpreter, tools::AstPrinter};
+use crate::{
+    errors::Err,
+    lox::{env::EnvId, interpreter::Interpreter},
+    tools::AstPrinter,
+};
 
 use super::token::Token;
 
@@ -34,6 +38,12 @@ pub enum Callable {
     Native(NativeFn),
 }
 
+#[derive(PartialEq, Debug, Clone)]
+pub enum BlockKind {
+    Default,
+    Closure,
+}
+
 // endregion
 
 // region: lower-level structures
@@ -45,7 +55,6 @@ pub struct ReturnStmt {
     pub keyword: Token,
     pub value: Expr,
 }
-
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct IfStmt {
@@ -81,6 +90,7 @@ pub struct FunStmt {
     pub name: Token,
     pub params: Vec<Token>,
     pub body: Box<Stmt>,
+    pub closure: Option<EnvId>,
 }
 
 #[derive(Debug, Clone)]
@@ -279,11 +289,12 @@ impl WhileStmt {
 }
 
 impl FunStmt {
-    pub fn new(name: Token, params: Vec<Token>, body: Stmt) -> Self {
+    pub fn new(name: Token, params: Vec<Token>, body: Stmt, closure: Option<EnvId>) -> Self {
         Self {
             name,
             params,
             body: Box::new(body),
+            closure,
         }
     }
 }

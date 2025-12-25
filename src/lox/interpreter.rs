@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::errors::{Err, RuntimeErr};
 use crate::lox::ast::*;
-use crate::lox::env::{Environment, Scope};
+use crate::lox::env::{EnvBindings, Environment};
 use crate::lox::token::*;
 
 #[derive(Debug)]
@@ -14,7 +14,6 @@ pub enum ExecResult {
 
 #[derive(Default, Debug)]
 pub struct Interpreter {
-    pub(crate) globals: Scope,
     pub(crate) env: Environment,
 }
 
@@ -32,10 +31,8 @@ impl Interpreter {
         let mut executer = Interpreter::default();
 
         executer
-            .globals
-            .insert(String::from("clock"), NativeFn::new(0, clock).into());
-
-        executer.env.push_scope(executer.globals.clone());
+            .env
+            .define(String::from("clock"), NativeFn::new(0, clock).into());
 
         for stmt in stmts {
             executer.execute(stmt)?;
@@ -54,8 +51,10 @@ impl Interpreter {
         Ok(ExecResult::Return(val))
     }
 
-    fn fun_statement(&mut self, fun_stmt: FunStmt) -> Result<ExecResult, Err> {
+    fn fun_statement(&mut self, mut fun_stmt: FunStmt) -> Result<ExecResult, Err> {
         let fn_name = fun_stmt.name.get_lexeme();
+
+        fun_stmt.closure = Some(self.env.curr_node);
 
         let fun: Callable = fun_stmt.into();
         self.env.define(fn_name, fun.into());
@@ -117,7 +116,7 @@ impl Interpreter {
             arguments.push(self.evaluate(arg)?);
         }
 
-        let LiteralExpr::Call(callable) = callee else {
+        let LiteralExpr::Call(mut callable) = callee else {
             return Err(RuntimeErr::InvalidCalleeExpr.into());
         };
 
@@ -140,7 +139,7 @@ impl Interpreter {
     }
 
     fn var_expr(&self, name: Token) -> Result<LiteralExpr, Err> {
-        self.env.get(name)
+        self.env.get(&name)
     }
 
     fn grouping_expr(&mut self, group: GroupingExpr) -> Result<LiteralExpr, Err> {
@@ -270,11 +269,9 @@ impl Interpreter {
         }
     }
 
-    fn execute_block(&mut self, stmts: Vec<Stmt>, scope: Option<Scope>) -> Result<ExecResult, Err> {
-        if let Some(sc) = scope {
-            self.env.push_scope(sc);
-        } else {
-            self.env.push_empty_scope();
+    fn execute_block(&mut self, stmts: Vec<Stmt>, kind: BlockKind) -> Result<ExecResult, Err> {
+        if let BlockKind::Default = kind {
+            self.env.push_node();
         }
 
         for stmt in stmts {
@@ -284,12 +281,12 @@ impl Interpreter {
             };
 
             if let ExecResult::Return(_) = result {
-                self.env.pop_scope();
+                self.env.pop_node();
                 return Ok(result);
             }
         }
 
-        self.env.pop_scope();
+        self.env.pop_node();
 
         Ok(ExecResult::Normal)
     }
@@ -299,7 +296,7 @@ impl Interpreter {
             Stmt::Expression(expr) => self.expr_statement(expr),
             Stmt::Print(val) => self.print_statement(val),
             Stmt::Var(var_stmt) => self.var_statement(var_stmt),
-            Stmt::Block(stmts) => self.execute_block(stmts, None),
+            Stmt::Block(stmts) => self.execute_block(stmts, BlockKind::Default),
             Stmt::If(if_stmt) => self.if_statement(if_stmt),
             Stmt::While(while_stmt) => self.while_statement(while_stmt),
             Stmt::Function(fn_) => self.fun_statement(fn_),
@@ -316,7 +313,11 @@ impl Callable {
         }
     }
 
-    pub fn call(&self, exec: &mut Interpreter, args: Vec<LiteralExpr>) -> Result<LiteralExpr, Err> {
+    pub fn call(
+        &mut self,
+        exec: &mut Interpreter,
+        args: Vec<LiteralExpr>,
+    ) -> Result<LiteralExpr, Err> {
         match self {
             Callable::User(fn_) => fn_.call(exec, args),
             Callable::Native(fn_) => (fn_.action)(exec, args),
@@ -325,11 +326,15 @@ impl Callable {
 }
 
 impl FunStmt {
-    pub fn call(&self, exec: &mut Interpreter, args: Vec<LiteralExpr>) -> Result<LiteralExpr, Err> {
-        let mut env: Scope = HashMap::new();
+    pub fn call(
+        &mut self,
+        exec: &mut Interpreter,
+        args: Vec<LiteralExpr>,
+    ) -> Result<LiteralExpr, Err> {
+        let mut fun_bindings: EnvBindings = HashMap::new();
 
-        for (param, arg) in self.params.iter().zip(args) {
-            env.insert(param.get_lexeme(), arg);
+        for (param, value) in self.params.iter().zip(args) {
+            fun_bindings.insert(param.get_lexeme(), value);
         }
 
         let stmts = match *self.body.clone() {
@@ -337,7 +342,18 @@ impl FunStmt {
             stmt => vec![stmt],
         };
 
-        let ExecResult::Return(val) = exec.execute_block(stmts, Some(env))? else {
+        // To ensure the correct program execution we need the node when the function is called, because env.pop_node() only restores the environment to the state when the function was declared
+        let previous = exec.env.curr_node;
+
+        if let Some(closure) = self.closure {
+            exec.env.push_closure(fun_bindings, closure);
+        }
+
+        let result = exec.execute_block(stmts, BlockKind::Closure);
+
+        exec.env.curr_node = previous;
+
+        let ExecResult::Return(val) = result? else {
             return Ok(LiteralExpr::Nil);
         };
 
@@ -452,7 +468,7 @@ mod tests {
 
         // Check if 'a' is in the environment
         let token = Token::new(TokenType::Identifier, "a".to_string(), 1);
-        let val = interpreter.env.get(token).expect("variable lookup failed");
+        let val = interpreter.env.get(&token).expect("variable lookup failed");
         assert_eq!(val, LiteralExpr::Number(1.0));
     }
 
@@ -465,7 +481,7 @@ mod tests {
         }
 
         let token = Token::new(TokenType::Identifier, "a".to_string(), 1);
-        let val = interpreter.env.get(token).expect("variable lookup failed");
+        let val = interpreter.env.get(&token).expect("variable lookup failed");
         assert_eq!(val, LiteralExpr::Number(2.0));
     }
 
@@ -487,12 +503,12 @@ mod tests {
         let token_a = Token::new(TokenType::Identifier, "a".to_string(), 1);
         let val_a = interpreter
             .env
-            .get(token_a)
+            .get(&token_a)
             .expect("variable lookup failed");
         assert_eq!(val_a, LiteralExpr::String("global".to_string()));
 
         let token_b = Token::new(TokenType::Identifier, "b".to_string(), 1);
-        let val_b = interpreter.env.get(token_b);
+        let val_b = interpreter.env.get(&token_b);
         assert!(
             val_b.is_err(),
             "Variable b should not be accessible outside the block"
@@ -517,7 +533,7 @@ mod tests {
         let token_a = Token::new(TokenType::Identifier, "a".to_string(), 1);
         let val_a = interpreter
             .env
-            .get(token_a)
+            .get(&token_a)
             .expect("variable lookup failed");
         assert_eq!(val_a, LiteralExpr::Number(1.0));
     }
@@ -540,7 +556,7 @@ mod tests {
         let token_a = Token::new(TokenType::Identifier, "a".to_string(), 1);
         let val_a = interpreter
             .env
-            .get(token_a)
+            .get(&token_a)
             .expect("variable lookup failed");
         assert_eq!(val_a, LiteralExpr::Number(2.0));
     }
@@ -562,7 +578,7 @@ mod tests {
         let token_a = Token::new(TokenType::Identifier, "a".to_string(), 1);
         let val_a = interpreter
             .env
-            .get(token_a)
+            .get(&token_a)
             .expect("variable lookup failed");
         assert_eq!(val_a, LiteralExpr::Number(1.0));
     }
@@ -586,7 +602,7 @@ mod tests {
         let token_a = Token::new(TokenType::Identifier, "a".to_string(), 1);
         let val_a = interpreter
             .env
-            .get(token_a)
+            .get(&token_a)
             .expect("variable lookup failed");
         assert_eq!(val_a, LiteralExpr::Number(2.0));
     }
@@ -610,7 +626,7 @@ mod tests {
         let token_a = Token::new(TokenType::Identifier, "a".to_string(), 1);
         let val_a = interpreter
             .env
-            .get(token_a)
+            .get(&token_a)
             .expect("variable lookup failed");
         assert_eq!(val_a, LiteralExpr::Number(3.0));
     }
@@ -650,7 +666,7 @@ mod tests {
         let token_a = Token::new(TokenType::Identifier, "a".to_string(), 1);
         let val_a = interpreter
             .env
-            .get(token_a)
+            .get(&token_a)
             .expect("variable lookup failed");
         assert_eq!(val_a, LiteralExpr::Number(3.0));
     }
@@ -672,8 +688,118 @@ mod tests {
         let token_a = Token::new(TokenType::Identifier, "a".to_string(), 1);
         let val_a = interpreter
             .env
-            .get(token_a)
+            .get(&token_a)
             .expect("variable lookup failed");
         assert_eq!(val_a, LiteralExpr::Number(3.0));
+    }
+
+    #[test]
+    fn test_function_declaration_and_call() {
+        let mut interpreter = Interpreter::default();
+        let src = "
+            fun add(a, b) {
+                return a + b;
+            }
+            var res = add(1, 2);
+        ";
+        let stmts = parse_stmts(src);
+        for stmt in stmts {
+            interpreter.execute(stmt).expect("execution failed");
+        }
+
+        let token_res = Token::new(TokenType::Identifier, "res".to_string(), 1);
+        let val_res = interpreter
+            .env
+            .get(&token_res)
+            .expect("variable lookup failed");
+        assert_eq!(val_res, LiteralExpr::Number(3.0));
+    }
+
+    #[test]
+    fn test_recursion_fibonacci() {
+        let mut interpreter = Interpreter::default();
+        let src = "
+            fun fib(n) {
+                if (n <= 1) return n;
+                return fib(n - 2) + fib(n - 1);
+            }
+            var res = fib(10);
+        ";
+        let stmts = parse_stmts(src);
+        for stmt in stmts {
+            interpreter.execute(stmt).expect("execution failed");
+        }
+
+        let token_res = Token::new(TokenType::Identifier, "res".to_string(), 1);
+        let val_res = interpreter
+            .env
+            .get(&token_res)
+            .expect("variable lookup failed");
+        assert_eq!(val_res, LiteralExpr::Number(55.0));
+    }
+
+    #[test]
+    fn test_closure() {
+        let mut interpreter = Interpreter::default();
+        let src = "
+            fun makeCounter() {
+                var i = 0;
+                fun count() {
+                    i = i + 1;
+                    return i;
+                }
+                return count;
+            }
+
+            var counter = makeCounter();
+            var c1 = counter();
+            var c2 = counter();
+        ";
+        let stmts = parse_stmts(src);
+        for stmt in stmts {
+            interpreter.execute(stmt).expect("execution failed");
+        }
+
+        let token_c1 = Token::new(TokenType::Identifier, "c1".to_string(), 1);
+        let val_c1 = interpreter
+            .env
+            .get(&token_c1)
+            .expect("variable lookup failed");
+        assert_eq!(val_c1, LiteralExpr::Number(1.0));
+
+        let token_c2 = Token::new(TokenType::Identifier, "c2".to_string(), 1);
+        let val_c2 = interpreter
+            .env
+            .get(&token_c2)
+            .expect("variable lookup failed");
+        assert_eq!(val_c2, LiteralExpr::Number(2.0));
+    }
+
+    #[test]
+    fn test_native_function_clock() {
+        let mut interpreter = Interpreter::default();
+        interpreter
+            .env
+            .define(String::from("clock"), NativeFn::new(0, clock).into());
+
+        let src = "
+            var t = clock();
+        ";
+        let stmts = parse_stmts(src);
+        for stmt in stmts {
+            interpreter.execute(stmt).expect("execution failed");
+        }
+
+        let token_t = Token::new(TokenType::Identifier, "t".to_string(), 1);
+        let val_t = interpreter
+            .env
+            .get(&token_t)
+            .expect("variable lookup failed");
+
+        if let LiteralExpr::Number(_) = val_t {
+            // Pass
+        } else {
+            panic!("clock() should return a number");
+        }
     }
 }

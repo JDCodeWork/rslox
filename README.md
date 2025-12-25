@@ -12,6 +12,16 @@ An implementation of the Lox language in Rust, following the book [Crafting Inte
 
 ---
 
+## ✨ Features
+
+- **Data Types**: Booleans, Numbers, Strings, Nil.
+- **Expressions**: Arithmetic, Logic, Comparison, Grouping.
+- **Statements**: Print, Expression, Block, If-Else, While, For.
+- **Functions**: Declaration, Calls, Return, Closures, Native Functions.
+- **Error Handling**: Syntax and Runtime errors.
+
+---
+
 ## ⚙️ Requirements
 
 - Rust 1.70+ (edition 2021) — install via <https://rustup.rs>
@@ -120,11 +130,11 @@ Features:
 - **Evaluation**: Tree-walk interpreter
 - **Control Flow**: `if-else`, `while`, `for`
 - **Logical Operators**: `and`, `or`
-- **Statements**: `print`, blocks, variable declarations
+- **Statements**: `print`, blocks, variable declarations, function declaration
 
 (temporal) Limitations:
 
-- No functions or classes
+- No classes
 
 ---
 
