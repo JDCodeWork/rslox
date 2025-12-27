@@ -27,7 +27,7 @@ pub enum Expr {
     Logical(LogicalExpr),
     Grouping(GroupingExpr),
     Literal(LiteralExpr),
-    Unary(Unary),
+    Unary(UnaryExpr),
     Var(Token),
     Call(CallExpr),
 }
@@ -135,7 +135,7 @@ pub enum LiteralExpr {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct Unary {
+pub struct UnaryExpr {
     pub operator: Token,
     pub right: Box<Expr>,
 }
@@ -211,7 +211,7 @@ impl Into<Expr> for GroupingExpr {
     }
 }
 
-impl Into<Expr> for Unary {
+impl Into<Expr> for UnaryExpr {
     fn into(self) -> Expr {
         Expr::Unary(self)
     }
@@ -355,7 +355,7 @@ impl GroupingExpr {
     }
 }
 
-impl Unary {
+impl UnaryExpr {
     pub fn new(operator: Token, right: Expr) -> Self {
         Self {
             operator,
@@ -495,7 +495,7 @@ impl Expr {
                 LiteralExpr::Call(call_expr) => call_expr.print(),
             },
             Expr::Unary(unary) => {
-                let Unary { operator, right } = unary;
+                let UnaryExpr { operator, right } = unary;
 
                 AstPrinter::parenthesize(&operator.get_lexeme(), vec![right])
             }

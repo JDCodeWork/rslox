@@ -52,6 +52,13 @@ pub enum ParseErr {
     UnexpectedEOF(usize),
     #[error("{0} can't have more than 255 arguments.")]
     TooManyArguments(String, usize),
+    #[error("Can't read local variable in its own initializer.")]
+    InvalidLocalVariable(usize),
+    #[error("Already a variable with this name in this scope.")]
+    VariablesWithSameName(usize),
+    #[error("Can't return from top-level code.")]
+    TopLevelReturn(usize)
+
 }
 
 impl ParseErr {
@@ -60,6 +67,9 @@ impl ParseErr {
             ParseErr::ExpectedToken(_, ln) => Some(*ln),
             ParseErr::UnexpectedEOF(ln) => Some(*ln),
             ParseErr::TooManyArguments(_, ln) => Some(*ln),
+            ParseErr::InvalidLocalVariable(ln) => Some(*ln),
+            ParseErr::VariablesWithSameName(ln) => Some(*ln),
+            ParseErr::TopLevelReturn(ln) => Some(*ln)
         }
     }
 

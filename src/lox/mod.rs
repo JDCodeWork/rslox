@@ -5,5 +5,6 @@ mod parser;
 mod run;
 mod scanner;
 pub mod token;
+mod resolver;
 
 pub use run::{handle_run_command, RunOptsCommand};

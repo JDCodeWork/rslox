@@ -62,37 +62,55 @@ impl Environment {
     }
 
     pub fn get(&self, name: &Token) -> Result<LiteralExpr, Err> {
-        let mut curr_id: Option<EnvId> = Some(self.curr_node);
+        let env = &self.nodes[0];
 
-        while let Some(id) = curr_id {
-            let env = &self.nodes[id];
-
-
-            if let Some(value) = env.values.get(&name.get_lexeme()) {
-                return Ok(value.to_owned());
-            }
-
-            curr_id = env.parent;
+        if let Some(value) = env.values.get(&name.get_lexeme()) {
+            return Ok(value.to_owned());
         }
 
         Err(RuntimeErr::UndefinedVariable(name.get_lexeme(), name.get_line()).to_err())
     }
 
+    pub fn get_at(&self, at: usize, name: &Token) -> Result<LiteralExpr, Err> {
+        let Some(lit) = self.nodes[self.ancestor(at)].values.get(&name.get_lexeme()) else {
+            return Err(RuntimeErr::UndefinedVariable(name.get_lexeme(), name.get_line()).into());
+        };
+
+        Ok(lit.clone())
+    }
+
+    pub fn ancestor(&self, distance: usize) -> usize {
+        let mut curr = Some(self.curr_node);
+
+        for _ in 0..distance {
+            let Some(curr_id) = curr else {
+                break;
+            };
+
+            curr = self.nodes[curr_id].parent;
+        }
+
+        curr.unwrap()
+    }
+
     pub fn assign(&mut self, name: Token, value: LiteralExpr) -> Result<(), Err> {
-        let mut curr_id: Option<EnvId> = Some(self.curr_node);
+        let env = &mut self.nodes[0];
 
-        while let Some(id) = curr_id {
-            let env = &mut self.nodes[id];
+        if env.values.contains_key(&name.get_lexeme()) {
+            env.values.insert(name.get_lexeme(), value);
 
-            if env.values.contains_key(&name.get_lexeme()) {
-                env.values.insert(name.get_lexeme(), value);
-                return Ok(());
-            }
-
-            curr_id = env.parent;
+            return Ok(());
         }
 
         Err(RuntimeErr::UndefinedVariable(name.get_lexeme(), name.get_line()).to_err())
+    }
+
+    pub fn assign_at(&mut self, at: usize, name: Token, value: LiteralExpr) -> Result<(), Err> {
+        let env_id = self.ancestor(at);
+        let target_env = &mut self.nodes[env_id];
+        target_env.values.insert(name.get_lexeme(), value);
+
+        Ok(())
     }
 
     pub fn push_closure(&mut self, bindings: EnvBindings, parent: EnvId) {

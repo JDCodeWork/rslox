@@ -5,6 +5,7 @@ use crate::{
     errors::{Err, IoErr},
     lox::{
         interpreter::Interpreter,
+        resolver::Resolver,
         scanner::Scanner,
         token::{Token, TokenType},
     },
@@ -127,8 +128,11 @@ fn run(tokens: Vec<Token>) -> Result<(), Err> {
             return Ok(());
         }
     };
+    let mut resolver = Resolver::new(Interpreter::new());
+    resolver.resolve_stmts(statements.clone());
 
-    match Interpreter::interpret(statements) {
+    let mut interpreter = resolver.interpreter;
+    match interpreter.interpret(statements) {
         Ok(()) => (),
         Err(runtime_err) => return Err(runtime_err),
     };

@@ -7,7 +7,7 @@ use crate::{
 };
 
 use super::{
-    ast::{BinaryExpr, Expr, GroupingExpr, LiteralExpr, Unary},
+    ast::{BinaryExpr, Expr, GroupingExpr, LiteralExpr, UnaryExpr},
     token::{
         Token,
         TokenType::{self, *},
@@ -331,7 +331,7 @@ impl Parser {
             let operator = self.previous().clone();
             let right = self.unary()?;
 
-            Ok(Unary::new(operator, right).into())
+            Ok(UnaryExpr::new(operator, right).into())
         } else {
             self.call()
         }

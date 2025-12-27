@@ -15,6 +15,7 @@ pub enum ExecResult {
 #[derive(Default, Debug)]
 pub struct Interpreter {
     pub(crate) env: Environment,
+    pub(crate) locals: HashMap<Token, usize>,
 }
 
 fn clock(_: &mut Interpreter, _: Vec<LiteralExpr>) -> Result<LiteralExpr, Err> {
@@ -27,15 +28,19 @@ fn clock(_: &mut Interpreter, _: Vec<LiteralExpr>) -> Result<LiteralExpr, Err> {
 }
 
 impl Interpreter {
-    pub fn interpret(stmts: Vec<Stmt>) -> Result<(), Err> {
-        let mut executer = Interpreter::default();
+    pub fn new() -> Self {
+        let mut interpreter = Self::default();
 
-        executer
+        interpreter
             .env
             .define(String::from("clock"), NativeFn::new(0, clock).into());
 
+        interpreter
+    }
+
+    pub fn interpret(&mut self, stmts: Vec<Stmt>) -> Result<(), Err> {
         for stmt in stmts {
-            executer.execute(stmt)?;
+            self.execute(stmt)?;
         }
 
         Ok(())
@@ -133,13 +138,20 @@ impl Interpreter {
 
     fn assign_expr(&mut self, assign: AssignmentExpr) -> Result<LiteralExpr, Err> {
         let val = self.evaluate(*assign.value)?;
-        self.env.assign(assign.name, val.clone())?;
+
+        let distance = self.locals.get(&assign.name);
+
+        if let Some(&dist) = distance {
+            self.env.assign_at(dist, assign.name, val.clone())?
+        } else {
+            self.env.assign(assign.name, val.clone())?;
+        }
 
         Ok(val)
     }
 
-    fn var_expr(&self, name: Token) -> Result<LiteralExpr, Err> {
-        self.env.get(&name)
+    fn var_expr(&mut self, name: Token) -> Result<LiteralExpr, Err> {
+        self.lookup_variable(&name)
     }
 
     fn grouping_expr(&mut self, group: GroupingExpr) -> Result<LiteralExpr, Err> {
@@ -217,7 +229,7 @@ impl Interpreter {
         Ok(self.evaluate(*logical.right)?)
     }
 
-    fn unary_expr(&mut self, unary: Unary) -> Result<LiteralExpr, Err> {
+    fn unary_expr(&mut self, unary: UnaryExpr) -> Result<LiteralExpr, Err> {
         let right = self.evaluate(*unary.right)?;
 
         match (unary.operator.get_type(), right) {
@@ -303,6 +315,20 @@ impl Interpreter {
             Stmt::Return(return_stmt) => self.return_statement(return_stmt),
         }
     }
+
+    fn lookup_variable(&self, name: &Token) -> Result<LiteralExpr, Err> {
+        let distance = self.locals.get(name);
+
+        if let Some(&dist) = distance {
+            self.env.get_at(dist, name)
+        } else {
+            self.env.get(name)
+        }
+    }
+
+    pub fn resolve(&mut self, name: &Token, deep: usize) {
+        self.locals.insert(name.clone(), deep);
+    }
 }
 
 impl Callable {
@@ -370,6 +396,7 @@ mod tests {
     use super::*;
     use crate::errors::Err;
     use crate::lox::parser::Parser;
+    use crate::lox::resolver::Resolver;
     use crate::lox::scanner::Scanner;
 
     fn eval_expr(src: &str) -> Result<LiteralExpr, Err> {
@@ -402,7 +429,22 @@ mod tests {
         let mut parser = Parser::new(tokens);
 
         let stmts = parser.parse().map_err(Err::from)?;
-        Interpreter::interpret(stmts)
+        Interpreter::new().interpret(stmts)
+    }
+
+    fn exec_src(src: &str) -> Result<Interpreter, Err> {
+        let mut scanner = Scanner::new(src.to_string());
+        let tokens = scanner.scan_tokens().clone();
+        let mut parser = Parser::new(tokens);
+
+        let stmts = parser.parse().map_err(Err::from)?;
+        let mut resolver = Resolver::new(Interpreter::new());
+        resolver.resolve_stmts(stmts.clone())?;
+
+        let mut interpreter = resolver.interpreter;
+        interpreter.interpret(stmts)?;
+
+        Ok(interpreter)
     }
 
     fn parse_stmts(src: &str) -> Vec<Stmt> {
