@@ -12,10 +12,14 @@ pub enum ExecResult {
     Return(LiteralExpr),
 }
 
+/**
+ * In the chapter about resolving and binding, the autor use a property called locals to map variable names to their depth in the environment stack. But the way of how rust handles ownership makes it complicated to use Tokens or Expressions as a key in the HashMap.
+ *
+ * To simplify the implementation, we use the depth property directly in the VarExpr and AssignExpr structures.
+ */
 #[derive(Default, Debug)]
 pub struct Interpreter {
     pub(crate) env: Environment,
-    pub(crate) locals: HashMap<Token, usize>,
 }
 
 fn clock(_: &mut Interpreter, _: Vec<LiteralExpr>) -> Result<LiteralExpr, Err> {
@@ -139,9 +143,7 @@ impl Interpreter {
     fn assign_expr(&mut self, assign: AssignmentExpr) -> Result<LiteralExpr, Err> {
         let val = self.evaluate(*assign.value)?;
 
-        let distance = self.locals.get(&assign.name);
-
-        if let Some(&dist) = distance {
+        if let Some(dist) = assign.depth {
             self.env.assign_at(dist, assign.name, val.clone())?
         } else {
             self.env.assign(assign.name, val.clone())?;
@@ -150,8 +152,12 @@ impl Interpreter {
         Ok(val)
     }
 
-    fn var_expr(&mut self, name: Token) -> Result<LiteralExpr, Err> {
-        self.lookup_variable(&name)
+    fn var_expr(&mut self, var: VarExpr) -> Result<LiteralExpr, Err> {
+        if let Some(dist) = var.depth {
+            self.env.get_at(dist, &var.name)
+        } else {
+            self.env.get(&var.name)
+        }
     }
 
     fn grouping_expr(&mut self, group: GroupingExpr) -> Result<LiteralExpr, Err> {
@@ -274,17 +280,15 @@ impl Interpreter {
             Expr::Grouping(group) => self.grouping_expr(group),
             Expr::Literal(literal) => Self::literal_expr(literal),
             Expr::Unary(unary) => self.unary_expr(unary),
-            Expr::Var(name) => self.var_expr(name),
+            Expr::Var(var) => self.var_expr(var),
             Expr::Assign(assign) => self.assign_expr(assign),
             Expr::Logical(logical) => self.logical_expr(logical),
             Expr::Call(call) => self.call_expr(call),
         }
     }
 
-    fn execute_block(&mut self, stmts: Vec<Stmt>, kind: BlockKind) -> Result<ExecResult, Err> {
-        if let BlockKind::Default = kind {
-            self.env.push_node();
-        }
+    fn execute_block(&mut self, stmts: Vec<Stmt>) -> Result<ExecResult, Err> {
+        self.env.push_node();
 
         for stmt in stmts {
             let result = match self.execute(stmt) {
@@ -308,26 +312,12 @@ impl Interpreter {
             Stmt::Expression(expr) => self.expr_statement(expr),
             Stmt::Print(val) => self.print_statement(val),
             Stmt::Var(var_stmt) => self.var_statement(var_stmt),
-            Stmt::Block(stmts) => self.execute_block(stmts, BlockKind::Default),
+            Stmt::Block(stmts) => self.execute_block(stmts),
             Stmt::If(if_stmt) => self.if_statement(if_stmt),
             Stmt::While(while_stmt) => self.while_statement(while_stmt),
             Stmt::Function(fn_) => self.fun_statement(fn_),
             Stmt::Return(return_stmt) => self.return_statement(return_stmt),
         }
-    }
-
-    fn lookup_variable(&self, name: &Token) -> Result<LiteralExpr, Err> {
-        let distance = self.locals.get(name);
-
-        if let Some(&dist) = distance {
-            self.env.get_at(dist, name)
-        } else {
-            self.env.get(name)
-        }
-    }
-
-    pub fn resolve(&mut self, name: &Token, deep: usize) {
-        self.locals.insert(name.clone(), deep);
     }
 }
 
@@ -375,7 +365,7 @@ impl FunStmt {
             exec.env.push_closure(fun_bindings, closure);
         }
 
-        let result = exec.execute_block(stmts, BlockKind::Closure);
+        let result = exec.execute_block(stmts);
 
         exec.env.curr_node = previous;
 
@@ -437,21 +427,14 @@ mod tests {
         let tokens = scanner.scan_tokens().clone();
         let mut parser = Parser::new(tokens);
 
-        let stmts = parser.parse().map_err(Err::from)?;
+        let mut stmts = parser.parse().map_err(Err::from)?;
         let mut resolver = Resolver::new(Interpreter::new());
-        resolver.resolve_stmts(stmts.clone())?;
+        resolver.resolve_stmts(&mut stmts)?;
 
         let mut interpreter = resolver.interpreter;
         interpreter.interpret(stmts)?;
 
         Ok(interpreter)
-    }
-
-    fn parse_stmts(src: &str) -> Vec<Stmt> {
-        let mut scanner = Scanner::new(src.to_string());
-        let tokens = scanner.scan_tokens().clone();
-        let mut parser = Parser::new(tokens);
-        parser.parse().expect("Failed to parse statements")
     }
 
     #[test]
@@ -502,11 +485,7 @@ mod tests {
 
     #[test]
     fn test_variable_declaration() {
-        let mut interpreter = Interpreter::default();
-        let stmts = parse_stmts("var a = 1;");
-        for stmt in stmts {
-            interpreter.execute(stmt).expect("execution failed");
-        }
+        let interpreter = exec_src("var a = 1;").expect("execution failed");
 
         // Check if 'a' is in the environment
         let token = Token::new(TokenType::Identifier, "a".to_string(), 1);
@@ -516,11 +495,7 @@ mod tests {
 
     #[test]
     fn test_variable_assignment() {
-        let mut interpreter = Interpreter::default();
-        let stmts = parse_stmts("var a = 1; a = 2;");
-        for stmt in stmts {
-            interpreter.execute(stmt).expect("execution failed");
-        }
+        let interpreter = exec_src("var a = 1; a = 2;").expect("execution failed");
 
         let token = Token::new(TokenType::Identifier, "a".to_string(), 1);
         let val = interpreter.env.get(&token).expect("variable lookup failed");
@@ -529,7 +504,6 @@ mod tests {
 
     #[test]
     fn test_block_scope() {
-        let mut interpreter = Interpreter::default();
         let src = "
             var a = \"global\";
             {
@@ -537,10 +511,7 @@ mod tests {
                 var b = \"block_b\";
             }
         ";
-        let stmts = parse_stmts(src);
-        for stmt in stmts {
-            interpreter.execute(stmt).expect("execution failed");
-        }
+        let interpreter = exec_src(src).expect("execution failed");
 
         let token_a = Token::new(TokenType::Identifier, "a".to_string(), 1);
         let val_a = interpreter
@@ -559,7 +530,6 @@ mod tests {
 
     #[test]
     fn test_scope_shadowing_and_assignment() {
-        let mut interpreter = Interpreter::default();
         let src = "
             var a = 1;
             {
@@ -567,10 +537,7 @@ mod tests {
                 a = 3;
             }
         ";
-        let stmts = parse_stmts(src);
-        for stmt in stmts {
-            interpreter.execute(stmt).expect("execution failed");
-        }
+        let interpreter = exec_src(src).expect("execution failed");
 
         let token_a = Token::new(TokenType::Identifier, "a".to_string(), 1);
         let val_a = interpreter
@@ -582,7 +549,6 @@ mod tests {
 
     #[test]
     fn test_if_statement_true() {
-        let mut interpreter = Interpreter::default();
         let src = "
             var a = 1;
             if (true) {
@@ -590,10 +556,7 @@ mod tests {
             }
         ";
 
-        let stmts = parse_stmts(src);
-        for stmt in stmts {
-            interpreter.execute(stmt).expect("execution failed");
-        }
+        let interpreter = exec_src(src).expect("execution failed");
 
         let token_a = Token::new(TokenType::Identifier, "a".to_string(), 1);
         let val_a = interpreter
@@ -605,17 +568,13 @@ mod tests {
 
     #[test]
     fn test_if_statement_false() {
-        let mut interpreter = Interpreter::default();
         let src = "
             var a = 1;
             if (false) {
                 a = 2;
             }
         ";
-        let stmts = parse_stmts(src);
-        for stmt in stmts {
-            interpreter.execute(stmt).expect("execution failed");
-        }
+        let interpreter = exec_src(src).expect("execution failed");
 
         let token_a = Token::new(TokenType::Identifier, "a".to_string(), 1);
         let val_a = interpreter
@@ -627,7 +586,6 @@ mod tests {
 
     #[test]
     fn test_if_else_statement_true() {
-        let mut interpreter = Interpreter::default();
         let src = "
             var a = 1;
             if (true) {
@@ -636,10 +594,7 @@ mod tests {
                 a = 3;
             }
         ";
-        let stmts = parse_stmts(src);
-        for stmt in stmts {
-            interpreter.execute(stmt).expect("execution failed");
-        }
+        let interpreter = exec_src(src).expect("execution failed");
 
         let token_a = Token::new(TokenType::Identifier, "a".to_string(), 1);
         let val_a = interpreter
@@ -651,7 +606,6 @@ mod tests {
 
     #[test]
     fn test_if_else_statement_false() {
-        let mut interpreter = Interpreter::default();
         let src = "
             var a = 1;
             if (false) {
@@ -660,10 +614,7 @@ mod tests {
                 a = 3;
             }
         ";
-        let stmts = parse_stmts(src);
-        for stmt in stmts {
-            interpreter.execute(stmt).expect("execution failed");
-        }
+        let interpreter = exec_src(src).expect("execution failed");
 
         let token_a = Token::new(TokenType::Identifier, "a".to_string(), 1);
         let val_a = interpreter
@@ -693,17 +644,13 @@ mod tests {
 
     #[test]
     fn test_while_statement() {
-        let mut interpreter = Interpreter::default();
         let src = "
             var a = 1;
             while (a < 3) {
                 a = a + 1;
             }
         ";
-        let stmts = parse_stmts(src);
-        for stmt in stmts {
-            interpreter.execute(stmt).expect("execution failed");
-        }
+        let interpreter = exec_src(src).expect("execution failed");
 
         let token_a = Token::new(TokenType::Identifier, "a".to_string(), 1);
         let val_a = interpreter
@@ -713,19 +660,16 @@ mod tests {
         assert_eq!(val_a, LiteralExpr::Number(3.0));
     }
 
+    // FIXME
     #[test]
     fn test_for_loop() {
-        let mut interpreter = Interpreter::default();
         let src = "
             var a = 0;
             for (var i = 0; i < 3; i = i + 1) {
                 a = a + i;
             }
         ";
-        let stmts = parse_stmts(src);
-        for stmt in stmts {
-            interpreter.execute(stmt).expect("execution failed");
-        }
+        let interpreter = exec_src(src).expect("execution failed");
 
         let token_a = Token::new(TokenType::Identifier, "a".to_string(), 1);
         let val_a = interpreter
@@ -737,17 +681,13 @@ mod tests {
 
     #[test]
     fn test_function_declaration_and_call() {
-        let mut interpreter = Interpreter::default();
         let src = "
             fun add(a, b) {
                 return a + b;
             }
             var res = add(1, 2);
         ";
-        let stmts = parse_stmts(src);
-        for stmt in stmts {
-            interpreter.execute(stmt).expect("execution failed");
-        }
+        let interpreter = exec_src(src).expect("execution failed");
 
         let token_res = Token::new(TokenType::Identifier, "res".to_string(), 1);
         let val_res = interpreter
@@ -759,7 +699,6 @@ mod tests {
 
     #[test]
     fn test_recursion_fibonacci() {
-        let mut interpreter = Interpreter::default();
         let src = "
             fun fib(n) {
                 if (n <= 1) return n;
@@ -767,10 +706,7 @@ mod tests {
             }
             var res = fib(10);
         ";
-        let stmts = parse_stmts(src);
-        for stmt in stmts {
-            interpreter.execute(stmt).expect("execution failed");
-        }
+        let interpreter = exec_src(src).expect("execution failed");
 
         let token_res = Token::new(TokenType::Identifier, "res".to_string(), 1);
         let val_res = interpreter
@@ -780,9 +716,9 @@ mod tests {
         assert_eq!(val_res, LiteralExpr::Number(55.0));
     }
 
+    // FIXME
     #[test]
     fn test_closure() {
-        let mut interpreter = Interpreter::default();
         let src = "
             fun makeCounter() {
                 var i = 0;
@@ -797,10 +733,7 @@ mod tests {
             var c1 = counter();
             var c2 = counter();
         ";
-        let stmts = parse_stmts(src);
-        for stmt in stmts {
-            interpreter.execute(stmt).expect("execution failed");
-        }
+        let interpreter = exec_src(src).expect("execution failed");
 
         let token_c1 = Token::new(TokenType::Identifier, "c1".to_string(), 1);
         let val_c1 = interpreter
@@ -819,18 +752,10 @@ mod tests {
 
     #[test]
     fn test_native_function_clock() {
-        let mut interpreter = Interpreter::default();
-        interpreter
-            .env
-            .define(String::from("clock"), NativeFn::new(0, clock).into());
-
         let src = "
             var t = clock();
         ";
-        let stmts = parse_stmts(src);
-        for stmt in stmts {
-            interpreter.execute(stmt).expect("execution failed");
-        }
+        let interpreter = exec_src(src).expect("execution failed");
 
         let token_t = Token::new(TokenType::Identifier, "t".to_string(), 1);
         let val_t = interpreter

@@ -28,7 +28,7 @@ pub enum Expr {
     Grouping(GroupingExpr),
     Literal(LiteralExpr),
     Unary(UnaryExpr),
-    Var(Token),
+    Var(VarExpr),
     Call(CallExpr),
 }
 
@@ -36,12 +36,6 @@ pub enum Expr {
 pub enum Callable {
     User(FunStmt),
     Native(NativeFn),
-}
-
-#[derive(PartialEq, Debug, Clone)]
-pub enum BlockKind {
-    Default,
-    Closure,
 }
 
 // endregion
@@ -83,6 +77,13 @@ pub struct WhileStmt {
 pub struct AssignmentExpr {
     pub name: Token,
     pub value: Box<Expr>,
+    pub depth: Option<usize>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct VarExpr {
+    pub name: Token,
+    pub depth: Option<usize>, // Depth in the environment stack; None means global
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -247,7 +248,7 @@ impl Into<LiteralExpr> for NativeFn {
     }
 }
 
-impl Into<Expr> for Token {
+impl Into<Expr> for VarExpr {
     fn into(self) -> Expr {
         Expr::Var(self)
     }
@@ -323,6 +324,16 @@ impl AssignmentExpr {
         Self {
             name,
             value: Box::new(initializer),
+            depth: None,
+        }
+    }
+}
+
+impl VarExpr {
+    pub fn new(name: Token) -> Self {
+        Self {
+            name,
+            depth: None,
         }
     }
 }
@@ -448,7 +459,7 @@ impl Expr {
                 // Print callee concisely: if it's a simple variable, use its lexeme;
                 // otherwise use the expression's print but strip a leading "call "
                 let callee_repr = match *callee {
-                    Expr::Var(token) => token.get_lexeme().to_string(),
+                    Expr::Var(var_expr) => var_expr.name.get_lexeme().to_string(),
                     other => {
                         let s = other.print();
                         // strip a leading "call " that nested call printing may add
@@ -499,8 +510,8 @@ impl Expr {
 
                 AstPrinter::parenthesize(&operator.get_lexeme(), vec![right])
             }
-            Expr::Var(str) => {
-                format!("var {str}")
+            Expr::Var(var_expr) => {
+                format!("var {}", var_expr.name.get_lexeme())
             }
             Expr::Assign(assign) => format!(
                 "Assign {} to {}",

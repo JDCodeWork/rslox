@@ -120,22 +120,12 @@ fn read_prompt() -> String {
 fn run(tokens: Vec<Token>) -> Result<(), Err> {
     let mut parser = Parser::new(tokens);
 
-    let statements = match parser.parse() {
-        Ok(expr) => expr,
-        Err(lox_err) => {
-            // Report parse error and attempt to recover so REPL can continue
-            lox_err.report();
-            return Ok(());
-        }
-    };
+    let mut statements = parser.parse()?;
     let mut resolver = Resolver::new(Interpreter::new());
-    resolver.resolve_stmts(statements.clone());
+    resolver.resolve_stmts(&mut statements)?;
 
     let mut interpreter = resolver.interpreter;
-    match interpreter.interpret(statements) {
-        Ok(()) => (),
-        Err(runtime_err) => return Err(runtime_err),
-    };
+    interpreter.interpret(statements)?;
 
     Ok(())
 }

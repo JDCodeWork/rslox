@@ -1,7 +1,7 @@
 use crate::{
     errors::{Err, ParseErr, RuntimeErr},
     lox::ast::{
-        AssignmentExpr, CallExpr, FunStmt, IfStmt, LogicalExpr, ReturnStmt, Stmt, VarStmt,
+        AssignmentExpr, CallExpr, FunStmt, IfStmt, LogicalExpr, ReturnStmt, Stmt, VarExpr, VarStmt,
         WhileStmt,
     },
 };
@@ -241,8 +241,8 @@ impl Parser {
 
         let val = self.assignment()?;
 
-        if let Expr::Var(name) = expr {
-            Ok(AssignmentExpr::new(name, val).into())
+        if let Expr::Var(var_expr) = expr {
+            Ok(AssignmentExpr::new(var_expr.name, val).into())
         } else {
             Err(RuntimeErr::InvalidAssignment.to_err())
         }
@@ -409,7 +409,7 @@ impl Parser {
 
                 GroupingExpr::new(expr).into()
             }
-            Identifier => Expr::Var(self.advance().clone()),
+            Identifier => VarExpr::new(self.advance().clone()).into(),
             _ => return Err(ParseErr::UnexpectedEOF(self.current).into_err()),
         };
         Ok(expression)

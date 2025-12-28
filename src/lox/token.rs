@@ -1,21 +1,11 @@
 use std::fmt;
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Token {
     token_type: TokenType,
     lexeme: String,
     line: usize,
 }
-
-impl PartialEq for Token {
-    fn eq(&self, other: &Self) -> bool {
-        self.token_type == other.token_type
-            && self.lexeme == other.lexeme
-            && self.line == other.line
-    }
-}
-
-impl Eq for Token {}
 
 impl Token {
     pub fn new(token_type: TokenType, lexeme: String, line: usize) -> Self {

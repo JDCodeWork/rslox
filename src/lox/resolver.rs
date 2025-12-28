@@ -5,7 +5,7 @@ use crate::{
     lox::{
         ast::{
             AssignmentExpr, BinaryExpr, CallExpr, Expr, FunStmt, GroupingExpr, IfStmt, LiteralExpr,
-            LogicalExpr, ReturnStmt, Stmt, UnaryExpr, VarStmt, WhileStmt,
+            LogicalExpr, ReturnStmt, Stmt, UnaryExpr, VarExpr, VarStmt, WhileStmt,
         },
         interpreter::Interpreter,
         token::Token,
@@ -27,7 +27,7 @@ impl Resolver {
         }
     }
 
-    fn resolve(&mut self, stmt: Stmt) -> Result<(), Err> {
+    fn resolve(&mut self, stmt: &mut Stmt) -> Result<(), Err> {
         match stmt {
             Stmt::Var(var) => self.rs_var_stmt(var),
             Stmt::Expression(expr) => self.rs_expression(expr),
@@ -40,7 +40,7 @@ impl Resolver {
         }
     }
 
-    pub fn resolve_stmts(&mut self, stmts: Vec<Stmt>) -> Result<(), Err> {
+    pub fn resolve_stmts(&mut self, stmts: &mut Vec<Stmt>) -> Result<(), Err> {
         for stmt in stmts {
             self.resolve(stmt)?;
         }
@@ -48,7 +48,7 @@ impl Resolver {
         Ok(())
     }
 
-    fn rs_expression(&mut self, expr: Expr) -> Result<(), Err> {
+    fn rs_expression(&mut self, expr: &mut Expr) -> Result<(), Err> {
         match expr {
             Expr::Assign(assign) => self.rs_assign_expr(assign),
             Expr::Var(var) => self.rs_var_expr(var),
@@ -61,23 +61,23 @@ impl Resolver {
         }
     }
 
-    fn rs_fun_stmt(&mut self, fun: FunStmt) -> Result<(), Err> {
+    fn rs_fun_stmt(&mut self, fun: &mut FunStmt) -> Result<(), Err> {
         self.declare(&fun.name)?;
         self.define(&fun.name)?;
 
         self.rs_function(fun)
     }
 
-    fn rs_function(&mut self, fun: FunStmt) -> Result<(), Err> {
+    fn rs_function(&mut self, fun: &mut FunStmt) -> Result<(), Err> {
         let enclosing_fn = self.in_function;
         self.in_function = true;
 
         self.begin_scope();
-        for param in fun.params {
-            self.declare(&param)?;
-            self.define(&param)?;
+        for param in &fun.params {
+            self.declare(param)?;
+            self.define(param)?;
         }
-        self.resolve(*fun.body)?;
+        self.resolve(&mut fun.body)?;
         self.end_scope();
 
         self.in_function = enclosing_fn;
@@ -85,65 +85,62 @@ impl Resolver {
         Ok(())
     }
 
-    fn rs_var_stmt(&mut self, var: VarStmt) -> Result<(), Err> {
+    fn rs_var_stmt(&mut self, var: &mut VarStmt) -> Result<(), Err> {
         self.declare(&var.name)?;
         if var.val != LiteralExpr::Nil.into() {
-            self.rs_expression(var.val)?;
+            self.rs_expression(&mut var.val)?;
         }
         self.define(&var.name)
     }
 
-    fn rs_if_stmt(&mut self, if_: IfStmt) -> Result<(), Err> {
-        self.rs_expression(if_.condition)?;
+    fn rs_if_stmt(&mut self, if_: &mut IfStmt) -> Result<(), Err> {
+        self.rs_expression(&mut if_.condition)?;
 
-        self.resolve(*if_.else_b)?;
-        self.resolve(*if_.then_b)
+        self.resolve(&mut if_.else_b)?;
+        self.resolve(&mut if_.then_b)
     }
 
-    fn rs_print_stmt(&mut self, value: Expr) -> Result<(), Err> {
+    fn rs_print_stmt(&mut self, value: &mut Expr) -> Result<(), Err> {
         self.rs_expression(value)
     }
 
-    fn rs_return_stmt(&mut self, return_: ReturnStmt) -> Result<(), Err> {
+    fn rs_return_stmt(&mut self, return_: &mut ReturnStmt) -> Result<(), Err> {
         if !self.in_function {
             ParseErr::TopLevelReturn(return_.keyword.get_line())
                 .into_err()
                 .report_and_exit(1);
         }
 
-        self.rs_expression(return_.value)
+        self.rs_expression(&mut return_.value)
     }
 
-    fn rs_while_stmt(&mut self, while_: WhileStmt) -> Result<(), Err> {
-        self.rs_expression(while_.condition)?;
+    fn rs_while_stmt(&mut self, while_: &mut WhileStmt) -> Result<(), Err> {
+        self.rs_expression(&mut while_.condition)?;
 
-        self.resolve(*while_.body)
+        self.resolve(&mut while_.body)
     }
 
-    fn rs_var_expr(&mut self, var: Token) -> Result<(), Err> {
-        let Some(scope) = self.scopes.last_mut() else {
-            return Err(ParseErr::InvalidLocalVariable(var.get_line()).into_err());
-        };
-
-        let Some(initialized) = scope.get(&var.get_lexeme()) else {
-            return Err(ParseErr::InvalidLocalVariable(var.get_line()).into_err());
-        };
-
-        if !*initialized {
-            return Err(ParseErr::InvalidLocalVariable(var.get_line()).into_err());
+    fn rs_var_expr(&mut self, var: &mut VarExpr) -> Result<(), Err> {
+        if let Some(scope) = self.scopes.last() {
+            if let Some(initialized) = scope.get(&var.name.get_lexeme()) {
+                if !*initialized {
+                    return Err(ParseErr::InvalidLocalVariable(var.name.get_line()).into_err());
+                }
+            }
         }
 
-        self.resolve_local(&var)
+        self.resolve_local(&var.name, &mut var.depth)?;
+        Ok(())
     }
 
-    fn rs_assign_expr(&mut self, assign: AssignmentExpr) -> Result<(), Err> {
-        self.rs_expression(*assign.value)?;
-        self.resolve_local(&assign.name)?;
+    fn rs_assign_expr(&mut self, assign: &mut AssignmentExpr) -> Result<(), Err> {
+        self.rs_expression(&mut assign.value)?;
+        self.resolve_local(&assign.name, &mut assign.depth)?;
 
         Ok(())
     }
 
-    fn rs_block_stmt(&mut self, stmts: Vec<Stmt>) -> Result<(), Err> {
+    fn rs_block_stmt(&mut self, stmts: &mut Vec<Stmt>) -> Result<(), Err> {
         self.begin_scope();
         for stmt in stmts {
             self.resolve(stmt)?;
@@ -153,38 +150,39 @@ impl Resolver {
         Ok(())
     }
 
-    fn rs_binary_expr(&mut self, bin: BinaryExpr) -> Result<(), Err> {
-        self.rs_expression(*bin.left)?;
-        self.rs_expression(*bin.right)
+    fn rs_binary_expr(&mut self, bin: &mut BinaryExpr) -> Result<(), Err> {
+        self.rs_expression(&mut bin.left)?;
+        self.rs_expression(&mut bin.right)
     }
 
-    fn rs_call_expr(&mut self, call: CallExpr) -> Result<(), Err> {
-        self.rs_expression(*call.callee)?;
+    fn rs_call_expr(&mut self, call: &mut CallExpr) -> Result<(), Err> {
+        self.rs_expression(&mut call.callee)?;
 
-        for arg in call.args {
+        for arg in &mut call.args {
             self.rs_expression(arg)?;
         }
 
         Ok(())
     }
 
-    fn rs_group_expr(&mut self, group: GroupingExpr) -> Result<(), Err> {
-        self.rs_expression(*group.expression)
+    fn rs_group_expr(&mut self, group: &mut GroupingExpr) -> Result<(), Err> {
+        self.rs_expression(&mut group.expression)
     }
 
-    fn rs_logic_expr(&mut self, logic: LogicalExpr) -> Result<(), Err> {
-        self.rs_expression(*logic.left)?;
-        self.rs_expression(*logic.right)
+    fn rs_logic_expr(&mut self, logic: &mut LogicalExpr) -> Result<(), Err> {
+        self.rs_expression(&mut logic.left)?;
+        self.rs_expression(&mut logic.right)
     }
 
-    fn rs_unary_expr(&mut self, unary: UnaryExpr) -> Result<(), Err> {
-        self.rs_expression(*unary.right)
+    fn rs_unary_expr(&mut self, unary: &mut UnaryExpr) -> Result<(), Err> {
+        self.rs_expression(&mut unary.right)
     }
 
-    fn resolve_local(&mut self, name: &Token) -> Result<(), Err> {
+    fn resolve_local(&mut self, name: &Token, depth: &mut Option<usize>) -> Result<(), Err> {
         for (i, scope) in self.scopes.iter().rev().enumerate() {
             if scope.contains_key(&name.get_lexeme()) {
-                self.interpreter.resolve(name, self.scopes.len() - 1 - i);
+                *depth = Some(i);
+
                 return Ok(());
             }
         }
@@ -202,9 +200,7 @@ impl Resolver {
 
     fn declare(&mut self, name: &Token) -> Result<(), Err> {
         let Some(scope) = self.scopes.last_mut() else {
-            return Err(
-                ParseErr::ExpectedToken("Expected block".to_string(), name.get_line()).into_err(),
-            );
+            return Ok(());
         };
 
         if scope.contains_key(&name.get_lexeme()) {
@@ -218,9 +214,7 @@ impl Resolver {
 
     fn define(&mut self, name: &Token) -> Result<(), Err> {
         let Some(scope) = self.scopes.last_mut() else {
-            return Err(
-                ParseErr::ExpectedToken("Expected block".to_string(), name.get_line()).into_err(),
-            );
+            return Ok(());
         };
 
         scope.insert(name.get_lexeme(), true);
