@@ -8,9 +8,16 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com).
 
 ## [Unreleased]
 
+## [0.9.0] - 2025-12-28
+
+### Added
+
 - Function declaration and calling support.
 - Native functions support (e.g., `clock()`).
 - Return statements.
+- Variable resolution pass (Resolver) for correct scoping.
+- Closure support with lexical scoping.
+- Semantic analysis for variable binding and scope validation.
 
 ## [0.8.0] - 2025-12-07
 

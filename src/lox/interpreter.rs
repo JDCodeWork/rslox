@@ -660,7 +660,6 @@ mod tests {
         assert_eq!(val_a, LiteralExpr::Number(3.0));
     }
 
-    // FIXME
     #[test]
     fn test_for_loop() {
         let src = "

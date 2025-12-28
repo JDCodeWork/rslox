@@ -106,9 +106,7 @@ impl Resolver {
 
     fn rs_return_stmt(&mut self, return_: &mut ReturnStmt) -> Result<(), Err> {
         if !self.in_function {
-            ParseErr::TopLevelReturn(return_.keyword.get_line())
-                .into_err()
-                .report_and_exit(1);
+            return Err(ParseErr::TopLevelReturn(return_.keyword.get_line()).into_err());
         }
 
         self.rs_expression(&mut return_.value)
@@ -220,5 +218,60 @@ impl Resolver {
         scope.insert(name.get_lexeme(), true);
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lox::parser::Parser;
+    use crate::lox::scanner::Scanner;
+
+    fn resolve_src(src: &str) -> Result<(), Err> {
+        let mut scanner = Scanner::new(src.to_string());
+        let tokens = scanner.scan_tokens().clone();
+        let mut parser = Parser::new(tokens);
+
+        let mut stmts = parser.parse().map_err(Err::from)?;
+        let mut resolver = Resolver::new(Interpreter::new());
+        resolver.resolve_stmts(&mut stmts)
+    }
+
+    #[test]
+    fn test_valid_resolution() {
+        let src = "
+            var a = 1;
+            fun f() {
+                print a;
+            }
+        ";
+        assert!(resolve_src(src).is_ok());
+    }
+
+    #[test]
+    fn test_var_redeclaration_error() {
+        let src = "
+            fun f() {
+                var a = 1;
+                var a = 2;
+            }
+        ";
+        let res = resolve_src(src);
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        let msg = format!("{:?}", err);
+        assert!(msg.contains("VariablesWithSameName") || msg.contains("PARSE"));
+    }
+
+    #[test]
+    fn test_top_level_return_error() {
+        let src = "
+            return 1;
+        ";
+        let res = resolve_src(src);
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        let msg = format!("{:?}", err);
+        assert!(msg.contains("TopLevelReturn") || msg.contains("PARSE"));
     }
 }
