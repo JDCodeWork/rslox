@@ -4,8 +4,8 @@ use crate::{
     errors::{Err, ParseErr},
     lox::{
         ast::{
-            AssignmentExpr, BinaryExpr, CallExpr, Expr, FunStmt, GroupingExpr, IfStmt, LiteralExpr,
-            LogicalExpr, ReturnStmt, Stmt, UnaryExpr, VarExpr, VarStmt, WhileStmt,
+            AssignmentExpr, BinaryExpr, CallExpr, ClassStmt, Expr, FunStmt, GroupingExpr, IfStmt,
+            LiteralExpr, LogicalExpr, ReturnStmt, Stmt, UnaryExpr, VarExpr, VarStmt, WhileStmt,
         },
         interpreter::Interpreter,
         token::Token,
@@ -37,6 +37,7 @@ impl Resolver {
             Stmt::Print(value) => self.rs_print_stmt(value),
             Stmt::Return(value) => self.rs_return_stmt(value),
             Stmt::While(while_) => self.rs_while_stmt(while_),
+            Stmt::Class(class) => self.rs_class_stmt(class),
         }
     }
 
@@ -59,6 +60,11 @@ impl Resolver {
             Expr::Unary(unary) => self.rs_unary_expr(unary),
             Expr::Literal(_) => Ok(()),
         }
+    }
+
+    fn rs_class_stmt(&mut self, class: &mut ClassStmt) -> Result<(), Err> {
+        self.declare(&class.name)?;
+        self.define(&class.name)
     }
 
     fn rs_fun_stmt(&mut self, fun: &mut FunStmt) -> Result<(), Err> {

@@ -50,6 +50,13 @@ impl Interpreter {
         Ok(())
     }
 
+    fn class_statement(&mut self, class_stmt: ClassStmt) -> Result<ExecResult, Err> {
+        self.env
+            .define(class_stmt.name.get_lexeme(), class_stmt.into());
+
+        Ok(ExecResult::Normal)
+    }
+
     fn return_statement(&mut self, return_stmt: ReturnStmt) -> Result<ExecResult, Err> {
         let mut val = LiteralExpr::Nil;
 
@@ -317,6 +324,7 @@ impl Interpreter {
             Stmt::While(while_stmt) => self.while_statement(while_stmt),
             Stmt::Function(fn_) => self.fun_statement(fn_),
             Stmt::Return(return_stmt) => self.return_statement(return_stmt),
+            Stmt::Class(class_stmt) => self.class_statement(class_stmt),
         }
     }
 }
@@ -326,6 +334,7 @@ impl Callable {
         match self {
             Callable::User(fn_) => fn_.arity(),
             Callable::Native(fn_) => fn_.arity as usize,
+            Callable::Class(_) => 0,
         }
     }
 
@@ -337,6 +346,7 @@ impl Callable {
         match self {
             Callable::User(fn_) => fn_.call(exec, args),
             Callable::Native(fn_) => (fn_.action)(exec, args),
+            Callable::Class(_) => Ok(LiteralExpr::Nil),
         }
     }
 }

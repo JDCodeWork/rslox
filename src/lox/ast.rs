@@ -18,6 +18,7 @@ pub enum Stmt {
     Function(FunStmt),
     Block(Vec<Stmt>),
     Return(ReturnStmt),
+    Class(ClassStmt),
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -35,6 +36,7 @@ pub enum Expr {
 #[derive(PartialEq, Debug, Clone)]
 pub enum Callable {
     User(FunStmt),
+    Class(ClassStmt),
     Native(NativeFn),
 }
 
@@ -67,6 +69,12 @@ pub struct VarStmt {
 pub struct WhileStmt {
     pub condition: Expr,
     pub body: Box<Stmt>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ClassStmt {
+    pub name: Token,
+    pub methods: Vec<FunStmt>,
 }
 
 // endregion
@@ -146,6 +154,18 @@ pub struct UnaryExpr {
 // endregion
 
 // region: Into trait implementation
+
+impl Into<LiteralExpr> for ClassStmt {
+    fn into(self) -> LiteralExpr {
+        LiteralExpr::Call(Callable::Class(self))
+    }
+}
+
+impl Into<Stmt> for ClassStmt {
+    fn into(self) -> Stmt {
+        Stmt::Class(self)
+    }
+}
 
 impl Into<Stmt> for ReturnStmt {
     fn into(self) -> Stmt {
@@ -258,6 +278,12 @@ impl Into<Expr> for VarExpr {
 
 // region: Implementation of new associated function
 
+impl ClassStmt {
+    pub fn new(name: Token, methods: Vec<FunStmt>) -> Self {
+        Self { name, methods }
+    }
+}
+
 impl ReturnStmt {
     pub fn new(keyword: Token, value: Expr) -> Self {
         Self { keyword, value }
@@ -331,10 +357,7 @@ impl AssignmentExpr {
 
 impl VarExpr {
     pub fn new(name: Token) -> Self {
-        Self {
-            name,
-            depth: None,
-        }
+        Self { name, depth: None }
     }
 }
 
@@ -381,6 +404,9 @@ impl UnaryExpr {
 impl Stmt {
     pub fn print(self) -> String {
         match self {
+            Self::Class(class) => {
+                format!("(class {})", class.name.get_lexeme())
+            }
             Stmt::Return(return_stmt) => {
                 format!("(return {})", return_stmt.value.print())
             }
@@ -443,6 +469,7 @@ impl Callable {
         match self {
             Callable::User(func) => Stmt::Function(func).print(),
             Callable::Native(_) => "<native>()".to_string(),
+            Callable::Class(class) => Into::<Stmt>::into(class).print(),
         }
     }
 }

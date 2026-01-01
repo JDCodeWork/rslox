@@ -1,8 +1,8 @@
 use crate::{
     errors::{Err, ParseErr, RuntimeErr},
     lox::ast::{
-        AssignmentExpr, CallExpr, FunStmt, IfStmt, LogicalExpr, ReturnStmt, Stmt, VarExpr, VarStmt,
-        WhileStmt,
+        AssignmentExpr, CallExpr, ClassStmt, FunStmt, IfStmt, LogicalExpr, ReturnStmt, Stmt,
+        VarExpr, VarStmt, WhileStmt,
     },
 };
 
@@ -38,7 +38,11 @@ impl Parser {
 
     fn declaration(&mut self) -> Result<Stmt, Err> {
         let stmt = match *self.peek().get_type() {
-            Fun => self.fun_dec("function"),
+            Class => self.class_dec(),
+            Fun => {
+                self.advance(); // Consume FUN token
+                self.fun_dec("function")
+            }
             Var => {
                 self.advance();
                 self.var_dec()
@@ -54,9 +58,25 @@ impl Parser {
         stmt
     }
 
-    fn fun_dec(&mut self, kind: &str) -> Result<Stmt, Err> {
-        self.advance(); // Consume FUN token
+    fn class_dec(&mut self) -> Result<Stmt, Err> {
+        self.advance(); // Consume CLASS token
 
+        let name = self.consume(Identifier, "Expect class name")?;
+        self.consume(LeftBrace, "Expected '{' after class name.")?;
+
+        let mut methods: Vec<FunStmt> = Vec::new();
+        while !self.check(&RightBrace) && !self.is_at_end() {
+            if let Stmt::Function(fun) = self.fun_dec("method")? {
+                methods.push(fun);
+            }
+        }
+        self.consume(RightBrace, "Expected '}' after class body.")?;
+
+        let class = ClassStmt::new(name, methods);
+        Ok(class.into())
+    }
+
+    fn fun_dec(&mut self, kind: &str) -> Result<Stmt, Err> {
         let name = self.consume(Identifier, format!("Expect {kind} name").as_str())?;
 
         self.consume(
