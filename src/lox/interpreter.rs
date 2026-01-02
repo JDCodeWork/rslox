@@ -124,6 +124,17 @@ impl Interpreter {
         Ok(ExecResult::Normal)
     }
 
+    fn set_expr(&mut self, set: SetExpr) -> Result<LiteralExpr, LoxError> {
+        let LiteralExpr::Instance(mut object) = self.evaluate(*set.object)? else {
+            return Err(RuntimeError::NotAnInstance.at(set.name.get_line()));
+        };
+
+        let val = self.evaluate(*set.value)?;
+        object.set(set.name, val.clone());
+
+        Ok(val)
+    }
+
     fn get_expr(&mut self, get: GetExpr) -> Result<LiteralExpr, LoxError> {
         let object = self.evaluate(*get.object)?;
         if let LiteralExpr::Instance(instance) = object {
@@ -305,6 +316,7 @@ impl Interpreter {
             Expr::Logical(logical) => self.logical_expr(logical),
             Expr::Call(call) => self.call_expr(call),
             Expr::Get(get) => self.get_expr(get),
+            Expr::Set(set) => self.set_expr(set),
         }
     }
 
@@ -366,8 +378,16 @@ impl Callable {
 }
 
 impl ClassInstance {
-    pub fn get(&self, _name: String) -> Result<LiteralExpr, LoxError> {
-        todo!()
+    pub fn get(&self, name: String) -> Result<LiteralExpr, LoxError> {
+        let Some(val) = self.fields.get(&name) else {
+            return Err(RuntimeError::UndefinedProperty(name).at(self.dec.name.get_line()));
+        };
+
+        Ok(val.clone())
+    }
+
+    pub fn set(&mut self, name: Token, value: LiteralExpr) {
+        self.fields.insert(name.get_lexeme(), value);
     }
 }
 

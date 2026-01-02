@@ -94,6 +94,8 @@ pub enum RuntimeError {
     DivisionByZero,
     #[error("Undefined variable \"{0}\".")]
     UndefinedVariable(String),
+    #[error("Undefined property \"{0}\".")]
+    UndefinedProperty(String),
     #[error("Invalid assignment target.")]
     InvalidAssignment,
     #[error("Can only call functions and classes.")]

@@ -2,7 +2,7 @@ use crate::{
     errors::{Locate, LocateResult, LoxError, ParseError, RuntimeError},
     lox::ast::{
         AssignmentExpr, CallExpr, ClassStmt, FunStmt, GetExpr, IfStmt, LogicalExpr, ReturnStmt,
-        Stmt, VarExpr, VarStmt, WhileStmt,
+        SetExpr, Stmt, VarExpr, VarStmt, WhileStmt,
     },
 };
 
@@ -263,6 +263,8 @@ impl Parser {
 
         if let Expr::Var(var_expr) = expr {
             Ok(AssignmentExpr::new(var_expr.name, val).into())
+        } else if let Expr::Get(get_expr) = expr {
+            Ok(SetExpr::new(*get_expr.object, get_expr.name, val).into())
         } else {
             Err(RuntimeError::InvalidAssignment).at(self.previous().get_line())
         }

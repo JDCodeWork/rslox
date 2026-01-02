@@ -5,8 +5,8 @@ use crate::{
     lox::{
         ast::{
             AssignmentExpr, BinaryExpr, CallExpr, ClassStmt, Expr, FunStmt, GetExpr, GroupingExpr,
-            IfStmt, LiteralExpr, LogicalExpr, ReturnStmt, Stmt, UnaryExpr, VarExpr, VarStmt,
-            WhileStmt,
+            IfStmt, LiteralExpr, LogicalExpr, ReturnStmt, SetExpr, Stmt, UnaryExpr, VarExpr,
+            VarStmt, WhileStmt,
         },
         interpreter::Interpreter,
         token::Token,
@@ -60,6 +60,7 @@ impl Resolver {
             Expr::Logical(logic) => self.rs_logic_expr(logic),
             Expr::Unary(unary) => self.rs_unary_expr(unary),
             Expr::Get(get) => self.rs_get_expr(get),
+            Expr::Set(set) => self.rs_set_expr(set),
             Expr::Literal(_) => Ok(()),
         }
     }
@@ -124,6 +125,11 @@ impl Resolver {
         self.rs_expression(&mut while_.condition)?;
 
         self.resolve(&mut while_.body)
+    }
+
+    fn rs_set_expr(&mut self, set: &mut SetExpr) -> Result<(), LoxError> {
+        self.rs_expression(&mut set.object)?;
+        self.rs_expression(&mut set.value)
     }
 
     fn rs_get_expr(&mut self, get: &mut GetExpr) -> Result<(), LoxError> {

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::{
     errors::LoxError,
     lox::{env::EnvId, interpreter::Interpreter},
@@ -32,6 +34,7 @@ pub enum Expr {
     Var(VarExpr),
     Call(CallExpr),
     Get(GetExpr),
+    Set(SetExpr),
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -85,6 +88,14 @@ pub struct ClassStmt {
 #[derive(Debug, PartialEq, Clone)]
 pub struct ClassInstance {
     pub dec: ClassStmt,
+    pub fields: HashMap<String, LiteralExpr>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct SetExpr {
+    pub object: Box<Expr>,
+    pub name: Token,
+    pub value: Box<Expr>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -212,6 +223,12 @@ impl Into<Stmt> for WhileStmt {
 impl Into<Stmt> for Expr {
     fn into(self) -> Stmt {
         Stmt::Expression(self)
+    }
+}
+
+impl Into<Expr> for SetExpr {
+    fn into(self) -> Expr {
+        Expr::Set(self)
     }
 }
 
@@ -360,6 +377,16 @@ impl NativeFn {
     }
 }
 
+impl SetExpr {
+    pub fn new(object: Expr, name: Token, value: Expr) -> Self {
+        Self {
+            object: Box::new(object),
+            name,
+            value: Box::new(value),
+        }
+    }
+}
+
 impl GetExpr {
     pub fn new(object: Expr, name: Token) -> Self {
         Self {
@@ -407,7 +434,10 @@ impl BinaryExpr {
 
 impl ClassInstance {
     pub fn new(dec: ClassStmt) -> Self {
-        Self { dec }
+        Self {
+            dec,
+            fields: HashMap::new(),
+        }
     }
 }
 
@@ -516,6 +546,9 @@ impl Callable {
 impl Expr {
     pub fn print(self) -> String {
         match self {
+            Expr::Set(set_expr) => {
+                format!("(set {})", set_expr.name)
+            }
             Expr::Get(get_expr) => {
                 format!("(get {})", get_expr.name)
             }
