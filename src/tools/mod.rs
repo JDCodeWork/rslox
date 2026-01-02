@@ -1,7 +1,7 @@
 use std::{fs::File, io::Write};
 
 use crate::{
-    errors::{Err, IoErr},
+    errors::{IoError, LoxError},
     lox::ast::{Expr, Stmt},
 };
 
@@ -51,12 +51,12 @@ impl AstGenerator {
         for ast_type in raw_ast_types {
             let type_name = match ast_type.split(":").nth(0) {
                 Some(sn) => sn.trim().to_string(),
-                None => Err::from(IoErr::ASTSyntaxInvalid).report_and_exit(1),
+                None => LoxError::Io(IoError::ASTSyntaxInvalid).report_and_exit(1),
             };
 
             let raw_type_fields = match ast_type.split(":").nth(1) {
                 Some(f) => f.trim(),
-                None => Err::from(IoErr::ASTSyntaxInvalid).report_and_exit(1),
+                None => LoxError::Io(IoError::ASTSyntaxInvalid).report_and_exit(1),
             };
 
             let mut type_fields = Vec::new();
@@ -66,13 +66,13 @@ impl AstGenerator {
                 let field_type = if let Some(f_t) = field_data.next() {
                     f_t.to_string()
                 } else {
-                    Err::from(IoErr::ASTSyntaxInvalid).report_and_exit(1)
+                    LoxError::Io(IoError::ASTSyntaxInvalid).report_and_exit(1)
                 };
 
                 let field_name = if let Some(f_n) = field_data.next() {
                     f_n.to_string()
                 } else {
-                    Err::from(IoErr::ASTSyntaxInvalid).report_and_exit(1)
+                    LoxError::Io(IoError::ASTSyntaxInvalid).report_and_exit(1)
                 };
 
                 type_fields.push(AstTypeField {
@@ -213,11 +213,11 @@ impl AstGenerator {
 
         let mut file = match File::create(&path) {
             Ok(f) => f,
-            Err(..) => IoErr::FailedToCreateFile(path).to_err().report_and_exit(1),
+            Err(..) => LoxError::Io(IoError::FailedToCreateFile(path)).report_and_exit(1),
         };
 
         if let Err(..) = file.write_all(self.generated_code.as_bytes()) {
-            IoErr::FailedToCreateFile(path).to_err().report_and_exit(1);
+            LoxError::Io(IoError::FailedToCreateFile(path)).report_and_exit(1);
         }
     }
 }

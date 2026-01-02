@@ -1,127 +1,111 @@
-use thiserror::Error as ThisError;
+use std::fmt;
+use thiserror::Error;
 
 use crate::cli::alerts::Alert;
 
-trait ErrorMsg {
-    fn get_msg(&self) -> String;
+#[derive(Debug)]
+pub struct Located<T> {
+    pub error: T,
+    pub line: usize,
 }
 
-#[derive(ThisError, Debug)]
-pub enum Err {
-    #[error(transparent)]
-    Scan(#[from] ScanErr),
-    #[error(transparent)]
-    Parse(#[from] ParseErr),
-    #[error(transparent)]
-    Runtime(#[from] RuntimeErr),
-    #[error(transparent)]
-    Io(#[from] IoErr),
+impl<T: fmt::Display> fmt::Display for Located<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[line {}] {}", self.line, self.error)
+    }
 }
 
-#[derive(ThisError, Debug, PartialEq)]
-pub enum ScanErr {
+#[derive(Error, Debug)]
+pub enum LoxError {
+    #[error("SCAN | {0}")]
+    Scan(Located<ScanError>),
+    #[error("PARSE | {0}")]
+    Parse(Located<ParseError>),
+    #[error("RUNTIME | {0}")]
+    Runtime(Located<RuntimeError>),
+    #[error("SYS | {0}")]
+    Io(#[from] IoError),
+}
+
+impl LoxError {
+    pub fn report(&self) {
+        Alert::error(self.to_string()).show();
+    }
+
+    pub fn report_and_exit(&self, code: i32) -> ! {
+        self.report();
+        std::process::exit(code);
+    }
+}
+
+pub trait LocateResult<T, E> {
+    fn at(self, line: usize) -> Result<T, LoxError>;
+}
+
+impl<T> LocateResult<T, ScanError> for Result<T, ScanError> {
+    fn at(self, line: usize) -> Result<T, LoxError> {
+        self.map_err(|e| LoxError::Scan(Located { error: e, line }))
+    }
+}
+
+impl<T> LocateResult<T, ParseError> for Result<T, ParseError> {
+    fn at(self, line: usize) -> Result<T, LoxError> {
+        self.map_err(|e| LoxError::Parse(Located { error: e, line }))
+    }
+}
+
+impl<T> LocateResult<T, RuntimeError> for Result<T, RuntimeError> {
+    fn at(self, line: usize) -> Result<T, LoxError> {
+        self.map_err(|e| LoxError::Runtime(Located { error: e, line }))
+    }
+}
+
+#[derive(Error, Debug, PartialEq)]
+pub enum ScanError {
     #[error("Unexpected character '{0}'.")]
-    UnexpectedChar(char, usize),
+    UnexpectedChar(char),
     #[error("Unterminated string.")]
-    UnterminatedString(usize),
+    UnterminatedString,
 }
 
-impl ScanErr {
-    fn ln(&self) -> usize {
-        match self {
-            ScanErr::UnexpectedChar(_, line) | ScanErr::UnterminatedString(line) => *line,
-        }
-    }
-
-    pub fn to_err(self) -> Err {
-        Err::Scan(self)
-    }
-}
-
-impl ErrorMsg for ScanErr {
-    fn get_msg(&self) -> String {
-        format!("SCAN | [line {}] {}", self.ln(), self.to_string())
-    }
-}
-
-#[derive(ThisError, Debug, PartialEq)]
-pub enum ParseErr {
+#[derive(Error, Debug, PartialEq)]
+pub enum ParseError {
     #[error("{0}")]
-    ExpectedToken(String, usize),
+    ExpectationFailed(String),
     #[error("Unexpected end of input.")]
-    UnexpectedEOF(usize),
+    UnexpectedEOF,
     #[error("{0} can't have more than 255 arguments.")]
-    TooManyArguments(String, usize),
+    TooManyArguments(String),
     #[error("Can't read local variable in its own initializer.")]
-    InvalidLocalVariable(usize),
+    SelfReferencingInitializer,
     #[error("Already a variable with this name in this scope.")]
-    VariablesWithSameName(usize),
+    VariableAlreadyDefined,
     #[error("Can't return from top-level code.")]
-    TopLevelReturn(usize),
+    TopLevelReturn,
 }
 
-impl ParseErr {
-    fn ln(&self) -> Option<usize> {
-        match self {
-            ParseErr::ExpectedToken(_, ln) => Some(*ln),
-            ParseErr::UnexpectedEOF(ln) => Some(*ln),
-            ParseErr::TooManyArguments(_, ln) => Some(*ln),
-            ParseErr::InvalidLocalVariable(ln) => Some(*ln),
-            ParseErr::VariablesWithSameName(ln) => Some(*ln),
-            ParseErr::TopLevelReturn(ln) => Some(*ln),
-        }
-    }
-
-    pub fn into_err(self) -> Err {
-        Err::Parse(self)
-    }
-}
-
-impl ErrorMsg for ParseErr {
-    fn get_msg(&self) -> String {
-        if let Some(ln) = self.ln() {
-            format!("PARSE | [line {}] {}", ln, self.to_string())
-        } else {
-            format!("PARSE | {}", self.to_string())
-        }
-    }
-}
-
-// ===== Runtime Errors =====
-#[derive(ThisError, Debug, PartialEq)]
-pub enum RuntimeErr {
+#[derive(Error, Debug, PartialEq)]
+pub enum RuntimeError {
     #[error("Operand must be a number.")]
-    OperandMustBeNumber,
+    NumberExpected,
     #[error("Operands must be two numbers or two strings.")]
-    InvalidOperandTypes,
+    InvalidBinaryOperands,
     #[error("Division by zero.")]
     DivisionByZero,
-    #[error("Undefined variable \"{0}\" at line {1}.")]
-    UndefinedVariable(String, usize),
+    #[error("Undefined variable \"{0}\".")]
+    UndefinedVariable(String),
     #[error("Invalid assignment target.")]
     InvalidAssignment,
-    #[error("Can only call functions and classes")]
-    InvalidCalleeExpr,
+    #[error("Can only call functions and classes.")]
+    NotCallable,
     #[error("Expected {0} arguments, but got {1}.")]
     ArgumentCountMismatch(usize, usize),
-    #[error("Only instances have properties. at {0}")]
-    InstanceProperties(usize),
+    #[error("Only instances have properties.")]
+    NotAnInstance,
 }
 
-impl RuntimeErr {
-    pub fn to_err(self) -> Err {
-        Err::Runtime(self)
-    }
-}
-
-impl ErrorMsg for RuntimeErr {
-    fn get_msg(&self) -> String {
-        format!("RUNTIME | {}", self.to_string())
-    }
-}
-
-#[derive(ThisError, Debug)]
-pub enum IoErr {
+#[derive(Error, Debug)]
+pub enum IoError {
     #[error(transparent)]
     Sys(#[from] std::io::Error),
     #[error("File not found in path: '{0}'")]
@@ -134,51 +118,24 @@ pub enum IoErr {
     ASTSyntaxInvalid,
 }
 
-impl ErrorMsg for IoErr {
-    fn get_msg(&self) -> String {
-        format!("SYS | {}", self.to_string())
+pub trait Locate {
+    fn at(self, line: usize) -> LoxError;
+}
+
+impl Locate for ScanError {
+    fn at(self, line: usize) -> LoxError {
+        LoxError::Scan(Located { error: self, line })
     }
 }
 
-impl IoErr {
-    pub fn to_err(self) -> Err {
-        Err::Io(self)
+impl Locate for ParseError {
+    fn at(self, line: usize) -> LoxError {
+        LoxError::Parse(Located { error: self, line })
     }
 }
 
-// ===== From implementations =====
-impl Err {
-    pub fn report(self) {
-        match self {
-            Err::Scan(err) => {
-                Alert::error(err.get_msg()).show();
-            }
-            Err::Parse(err) => {
-                Alert::error(err.get_msg()).show();
-            }
-            Err::Runtime(err) => {
-                Alert::error(err.get_msg()).show();
-            }
-            Err::Io(err) => {
-                Alert::error(err.get_msg()).show();
-            }
-        };
-    }
-
-    pub fn report_and_exit(self, code: i32) -> ! {
-        match self {
-            Err::Scan(err) => {
-                Alert::error(err.get_msg()).show_and_exit(code);
-            }
-            Err::Parse(err) => {
-                Alert::error(err.get_msg()).show_and_exit(code);
-            }
-            Err::Runtime(err) => {
-                Alert::error(err.get_msg()).show_and_exit(code);
-            }
-            Err::Io(err) => {
-                Alert::error(err.get_msg()).show_and_exit(code);
-            }
-        };
+impl Locate for RuntimeError {
+    fn at(self, line: usize) -> LoxError {
+        LoxError::Runtime(Located { error: self, line })
     }
 }

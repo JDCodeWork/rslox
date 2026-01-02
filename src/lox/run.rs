@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, fs, io};
 
 use crate::{
     cli::alerts::Alert,
-    errors::{Err, IoErr},
+    errors::{IoError, LoxError},
     lox::{
         interpreter::Interpreter,
         resolver::Resolver,
@@ -77,16 +77,14 @@ fn handle_path_format(path: &str) -> String {
     if path.ends_with(".lox") {
         path.to_string()
     } else {
-        IoErr::InvalidFileExtension.to_err().report_and_exit(1);
+        LoxError::Io(IoError::InvalidFileExtension).report_and_exit(1);
     }
 }
 
 fn read_file(path: &str) -> String {
     match fs::read_to_string(path) {
         Ok(val) => val,
-        Err(..) => IoErr::FileNotFound(path.to_string())
-            .to_err()
-            .report_and_exit(1),
+        Err(..) => LoxError::Io(IoError::FileNotFound(path.to_string())).report_and_exit(1),
     }
 }
 
@@ -100,11 +98,11 @@ fn read_prompt() -> String {
 
         // Force the buffer to be send to the console
         if let Err(e) = io::Write::flush(&mut io::stdout()) {
-            IoErr::Sys(e).to_err().report();
+            LoxError::Io(IoError::Sys(e)).report();
         }
 
         if let Err(e) = io::stdin().read_line(&mut line) {
-            IoErr::Sys(e).to_err().report();
+            LoxError::Io(IoError::Sys(e)).report();
         }
         if line.trim().is_empty() {
             print!("\n");
@@ -117,7 +115,7 @@ fn read_prompt() -> String {
     source
 }
 
-fn run(tokens: Vec<Token>) -> Result<(), Err> {
+fn run(tokens: Vec<Token>) -> Result<(), LoxError> {
     let mut parser = Parser::new(tokens);
 
     let mut statements = parser.parse()?;

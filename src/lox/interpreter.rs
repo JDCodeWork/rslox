@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::errors::{Err, RuntimeErr};
+use crate::errors::{Locate, LoxError, RuntimeError};
 use crate::lox::ast::*;
 use crate::lox::env::{EnvBindings, Environment};
 use crate::lox::token::*;
@@ -22,7 +22,7 @@ pub struct Interpreter {
     pub(crate) env: Environment,
 }
 
-fn clock(_: &mut Interpreter, _: Vec<LiteralExpr>) -> Result<LiteralExpr, Err> {
+fn clock(_: &mut Interpreter, _: Vec<LiteralExpr>) -> Result<LiteralExpr, LoxError> {
     let time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
@@ -42,7 +42,7 @@ impl Interpreter {
         interpreter
     }
 
-    pub fn interpret(&mut self, stmts: Vec<Stmt>) -> Result<(), Err> {
+    pub fn interpret(&mut self, stmts: Vec<Stmt>) -> Result<(), LoxError> {
         for stmt in stmts {
             self.execute(stmt)?;
         }
@@ -50,14 +50,14 @@ impl Interpreter {
         Ok(())
     }
 
-    fn class_statement(&mut self, class_stmt: ClassStmt) -> Result<ExecResult, Err> {
+    fn class_statement(&mut self, class_stmt: ClassStmt) -> Result<ExecResult, LoxError> {
         self.env
             .define(class_stmt.name.get_lexeme(), class_stmt.into());
 
         Ok(ExecResult::Normal)
     }
 
-    fn return_statement(&mut self, return_stmt: ReturnStmt) -> Result<ExecResult, Err> {
+    fn return_statement(&mut self, return_stmt: ReturnStmt) -> Result<ExecResult, LoxError> {
         let mut val = LiteralExpr::Nil;
 
         if return_stmt.value != LiteralExpr::Nil.into() {
@@ -67,7 +67,7 @@ impl Interpreter {
         Ok(ExecResult::Return(val))
     }
 
-    fn fun_statement(&mut self, mut fun_stmt: FunStmt) -> Result<ExecResult, Err> {
+    fn fun_statement(&mut self, mut fun_stmt: FunStmt) -> Result<ExecResult, LoxError> {
         let fn_name = fun_stmt.name.get_lexeme();
 
         fun_stmt.closure = Some(self.env.curr_node);
@@ -78,7 +78,7 @@ impl Interpreter {
         Ok(ExecResult::Normal)
     }
 
-    fn if_statement(&mut self, if_stmt: IfStmt) -> Result<ExecResult, Err> {
+    fn if_statement(&mut self, if_stmt: IfStmt) -> Result<ExecResult, LoxError> {
         let mut result = ExecResult::Normal;
 
         if Self::is_truthy(self.evaluate(if_stmt.condition)?)? {
@@ -90,14 +90,14 @@ impl Interpreter {
         Ok(result)
     }
 
-    fn var_statement(&mut self, var_stmt: VarStmt) -> Result<ExecResult, Err> {
+    fn var_statement(&mut self, var_stmt: VarStmt) -> Result<ExecResult, LoxError> {
         let value = self.evaluate(var_stmt.val)?;
 
         self.env.define(var_stmt.name.get_lexeme(), value);
         Ok(ExecResult::Normal)
     }
 
-    fn while_statement(&mut self, while_stmt: WhileStmt) -> Result<ExecResult, Err> {
+    fn while_statement(&mut self, while_stmt: WhileStmt) -> Result<ExecResult, LoxError> {
         let WhileStmt { condition, body } = while_stmt;
 
         while Self::is_truthy(self.evaluate(condition.clone())?)? {
@@ -111,29 +111,29 @@ impl Interpreter {
         Ok(ExecResult::Normal)
     }
 
-    fn expr_statement(&mut self, expr: Expr) -> Result<ExecResult, Err> {
+    fn expr_statement(&mut self, expr: Expr) -> Result<ExecResult, LoxError> {
         self.evaluate(expr)?;
 
         Ok(ExecResult::Normal)
     }
 
-    fn print_statement(&mut self, expr: Expr) -> Result<ExecResult, Err> {
+    fn print_statement(&mut self, expr: Expr) -> Result<ExecResult, LoxError> {
         let val: Expr = self.evaluate(expr)?.into();
         println!("{}", val.print());
 
         Ok(ExecResult::Normal)
     }
 
-    fn get_expr(&mut self, get: GetExpr) -> Result<LiteralExpr, Err> {
+    fn get_expr(&mut self, get: GetExpr) -> Result<LiteralExpr, LoxError> {
         let object = self.evaluate(*get.object)?;
         if let LiteralExpr::Instance(instance) = object {
             return Ok(instance.get(get.name.get_lexeme().to_string())?);
         }
 
-        Err(RuntimeErr::InstanceProperties(get.name.get_line()).to_err())
+        Err(RuntimeError::NotAnInstance.at(get.name.get_line()))
     }
 
-    fn call_expr(&mut self, call: CallExpr) -> Result<LiteralExpr, Err> {
+    fn call_expr(&mut self, call: CallExpr) -> Result<LiteralExpr, LoxError> {
         let callee = self.evaluate(*call.callee)?;
 
         let mut arguments = Vec::new();
@@ -142,12 +142,13 @@ impl Interpreter {
         }
 
         let LiteralExpr::Call(mut callable) = callee else {
-            return Err(RuntimeErr::InvalidCalleeExpr.into());
+            return Err(RuntimeError::NotCallable.at(call.paren.get_line()));
         };
 
         if arguments.len() != callable.arity() {
             return Err(
-                RuntimeErr::ArgumentCountMismatch(callable.arity(), arguments.len()).into(),
+                RuntimeError::ArgumentCountMismatch(callable.arity(), arguments.len())
+                    .at(call.paren.get_line()),
             );
         }
 
@@ -156,7 +157,7 @@ impl Interpreter {
         Ok(val)
     }
 
-    fn assign_expr(&mut self, assign: AssignmentExpr) -> Result<LiteralExpr, Err> {
+    fn assign_expr(&mut self, assign: AssignmentExpr) -> Result<LiteralExpr, LoxError> {
         let val = self.evaluate(*assign.value)?;
 
         if let Some(dist) = assign.depth {
@@ -168,7 +169,7 @@ impl Interpreter {
         Ok(val)
     }
 
-    fn var_expr(&mut self, var: VarExpr) -> Result<LiteralExpr, Err> {
+    fn var_expr(&mut self, var: VarExpr) -> Result<LiteralExpr, LoxError> {
         if let Some(dist) = var.depth {
             self.env.get_at(dist, &var.name)
         } else {
@@ -176,11 +177,11 @@ impl Interpreter {
         }
     }
 
-    fn grouping_expr(&mut self, group: GroupingExpr) -> Result<LiteralExpr, Err> {
+    fn grouping_expr(&mut self, group: GroupingExpr) -> Result<LiteralExpr, LoxError> {
         self.evaluate(*group.expression)
     }
 
-    fn binary_expr(&mut self, binary: BinaryExpr) -> Result<LiteralExpr, Err> {
+    fn binary_expr(&mut self, binary: BinaryExpr) -> Result<LiteralExpr, LoxError> {
         let left_expr = self.evaluate(*binary.left)?;
         let right_expr = self.evaluate(*binary.right)?;
 
@@ -197,26 +198,26 @@ impl Interpreter {
                 (LiteralExpr::Number(left_num), LiteralExpr::Number(right_num)) => {
                     return Ok(LiteralExpr::Number(left_num + right_num))
                 }
-                _ => return Err(RuntimeErr::InvalidOperandTypes.to_err()),
+                _ => return Err(RuntimeError::InvalidBinaryOperands.at(binary.operator.get_line())),
             }
         }
 
         let left_num = match left_expr {
             LiteralExpr::Number(num) => num,
-            _ => return Err(Err::from(RuntimeErr::OperandMustBeNumber)),
+            _ => return Err(RuntimeError::NumberExpected.at(binary.operator.get_line())),
         };
 
         let right_num = match right_expr {
             LiteralExpr::Number(num) => num,
             LiteralExpr::String(ref str) => str.len() as f64,
-            _ => return Err(Err::from(RuntimeErr::OperandMustBeNumber)),
+            _ => return Err(RuntimeError::NumberExpected.at(binary.operator.get_line())),
         };
 
         match *binary.operator.get_type() {
             TokenType::Minus => Ok(LiteralExpr::Number(left_num - right_num)),
             TokenType::Slash => {
                 if right_num == 0.0 {
-                    return Err(RuntimeErr::DivisionByZero.to_err());
+                    return Err(RuntimeError::DivisionByZero.at(binary.operator.get_line()));
                 }
                 Ok(LiteralExpr::Number(left_num / right_num))
             }
@@ -237,7 +238,7 @@ impl Interpreter {
         }
     }
 
-    fn logical_expr(&mut self, logical: LogicalExpr) -> Result<LiteralExpr, Err> {
+    fn logical_expr(&mut self, logical: LogicalExpr) -> Result<LiteralExpr, LoxError> {
         let left = self.evaluate(*logical.left)?;
 
         if *logical.operator.get_type() == TokenType::Or {
@@ -251,12 +252,14 @@ impl Interpreter {
         Ok(self.evaluate(*logical.right)?)
     }
 
-    fn unary_expr(&mut self, unary: UnaryExpr) -> Result<LiteralExpr, Err> {
+    fn unary_expr(&mut self, unary: UnaryExpr) -> Result<LiteralExpr, LoxError> {
         let right = self.evaluate(*unary.right)?;
 
         match (unary.operator.get_type(), right) {
             (TokenType::Minus, LiteralExpr::Number(num)) => Ok(LiteralExpr::Number(-num)),
-            (TokenType::Minus, _) => Err(Err::from(RuntimeErr::OperandMustBeNumber)),
+            (TokenType::Minus, _) => {
+                Err(RuntimeError::NumberExpected.at(unary.operator.get_line()))
+            }
             (TokenType::Bang, lit) => {
                 let bool_val = Interpreter::is_truthy(lit)?;
                 Ok(LiteralExpr::Boolean(!bool_val))
@@ -265,11 +268,11 @@ impl Interpreter {
         }
     }
 
-    fn literal_expr(lit: LiteralExpr) -> Result<LiteralExpr, Err> {
+    fn literal_expr(lit: LiteralExpr) -> Result<LiteralExpr, LoxError> {
         Ok(lit)
     }
 
-    fn is_truthy(lit: LiteralExpr) -> Result<bool, Err> {
+    fn is_truthy(lit: LiteralExpr) -> Result<bool, LoxError> {
         match lit {
             LiteralExpr::Boolean(value) => Ok(value),
             LiteralExpr::Number(value) => Ok(value != 0.0),
@@ -280,7 +283,7 @@ impl Interpreter {
         }
     }
 
-    fn is_equal(left_lit: LiteralExpr, right_lit: LiteralExpr) -> Result<bool, Err> {
+    fn is_equal(left_lit: LiteralExpr, right_lit: LiteralExpr) -> Result<bool, LoxError> {
         match (&left_lit, &right_lit) {
             (LiteralExpr::Nil, LiteralExpr::Nil) => Ok(true),
             (LiteralExpr::Nil, _) => Ok(false),
@@ -291,7 +294,7 @@ impl Interpreter {
         }
     }
 
-    fn evaluate(&mut self, expr: Expr) -> Result<LiteralExpr, Err> {
+    fn evaluate(&mut self, expr: Expr) -> Result<LiteralExpr, LoxError> {
         match expr {
             Expr::Binary(binary) => self.binary_expr(binary),
             Expr::Grouping(group) => self.grouping_expr(group),
@@ -305,7 +308,7 @@ impl Interpreter {
         }
     }
 
-    fn execute_block(&mut self, stmts: Vec<Stmt>) -> Result<ExecResult, Err> {
+    fn execute_block(&mut self, stmts: Vec<Stmt>) -> Result<ExecResult, LoxError> {
         self.env.push_node();
 
         for stmt in stmts {
@@ -325,7 +328,7 @@ impl Interpreter {
         Ok(ExecResult::Normal)
     }
 
-    pub fn execute(&mut self, stmt: Stmt) -> Result<ExecResult, Err> {
+    pub fn execute(&mut self, stmt: Stmt) -> Result<ExecResult, LoxError> {
         match stmt {
             Stmt::Expression(expr) => self.expr_statement(expr),
             Stmt::Print(val) => self.print_statement(val),
@@ -353,7 +356,7 @@ impl Callable {
         &mut self,
         exec: &mut Interpreter,
         args: Vec<LiteralExpr>,
-    ) -> Result<LiteralExpr, Err> {
+    ) -> Result<LiteralExpr, LoxError> {
         match self {
             Callable::User(fn_) => fn_.call(exec, args),
             Callable::Native(fn_) => (fn_.action)(exec, args),
@@ -363,13 +366,17 @@ impl Callable {
 }
 
 impl ClassInstance {
-    pub fn get(&self, name: String) -> Result<LiteralExpr, Err> {
+    pub fn get(&self, _name: String) -> Result<LiteralExpr, LoxError> {
         todo!()
     }
 }
 
 impl ClassStmt {
-    pub fn call(&mut self, _: &mut Interpreter, _: Vec<LiteralExpr>) -> Result<LiteralExpr, Err> {
+    pub fn call(
+        &mut self,
+        _: &mut Interpreter,
+        _: Vec<LiteralExpr>,
+    ) -> Result<LiteralExpr, LoxError> {
         let instance = ClassInstance::new(self.clone());
 
         Ok(instance.into())
@@ -385,7 +392,7 @@ impl FunStmt {
         &mut self,
         exec: &mut Interpreter,
         args: Vec<LiteralExpr>,
-    ) -> Result<LiteralExpr, Err> {
+    ) -> Result<LiteralExpr, LoxError> {
         let mut fun_bindings: EnvBindings = HashMap::new();
 
         for (param, value) in self.params.iter().zip(args) {
@@ -423,17 +430,17 @@ impl FunStmt {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::errors::Err;
+    use crate::errors::LoxError;
     use crate::lox::parser::Parser;
     use crate::lox::resolver::Resolver;
     use crate::lox::scanner::Scanner;
 
-    fn eval_expr(src: &str) -> Result<LiteralExpr, Err> {
+    fn eval_expr(src: &str) -> Result<LiteralExpr, LoxError> {
         let mut scanner = Scanner::new(src.to_string());
         let tokens = scanner.scan_tokens().clone();
         let mut parser = Parser::new(tokens);
 
-        let stmts = parser.parse().map_err(Err::from)?;
+        let stmts = parser.parse()?;
 
         if let Some(stmt) = stmts.first() {
             match stmt {
@@ -445,28 +452,28 @@ mod tests {
                     let mut interpreter = Interpreter::default();
                     interpreter.evaluate(expr.clone())
                 }
-                _ => Err(Err::from(RuntimeErr::InvalidOperandTypes)),
+                _ => Err(RuntimeError::InvalidBinaryOperands.at(0)),
             }
         } else {
-            Err(Err::from(RuntimeErr::InvalidOperandTypes))
+            Err(RuntimeError::InvalidBinaryOperands.at(0))
         }
     }
 
-    fn run_src(src: &str) -> Result<(), Err> {
+    fn run_src(src: &str) -> Result<(), LoxError> {
         let mut scanner = Scanner::new(src.to_string());
         let tokens = scanner.scan_tokens().clone();
         let mut parser = Parser::new(tokens);
 
-        let stmts = parser.parse().map_err(Err::from)?;
+        let stmts = parser.parse()?;
         Interpreter::new().interpret(stmts)
     }
 
-    fn exec_src(src: &str) -> Result<Interpreter, Err> {
+    fn exec_src(src: &str) -> Result<Interpreter, LoxError> {
         let mut scanner = Scanner::new(src.to_string());
         let tokens = scanner.scan_tokens().clone();
         let mut parser = Parser::new(tokens);
 
-        let mut stmts = parser.parse().map_err(Err::from)?;
+        let mut stmts = parser.parse()?;
         let mut resolver = Resolver::new(Interpreter::new());
         resolver.resolve_stmts(&mut stmts)?;
 
@@ -501,9 +508,7 @@ mod tests {
         let err = res.unwrap_err();
         let dbg = format!("{:?}", err);
         assert!(
-            dbg.contains("Operand")
-                || dbg.contains("OperandMustBeNumber")
-                || dbg.contains("RUNTIME")
+            dbg.contains("Operand") || dbg.contains("NumberExpected") || dbg.contains("RUNTIME")
         );
     }
 

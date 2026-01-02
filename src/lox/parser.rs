@@ -1,5 +1,5 @@
 use crate::{
-    errors::{Err, ParseErr, RuntimeErr},
+    errors::{Locate, LocateResult, LoxError, ParseError, RuntimeError},
     lox::ast::{
         AssignmentExpr, CallExpr, ClassStmt, FunStmt, GetExpr, IfStmt, LogicalExpr, ReturnStmt,
         Stmt, VarExpr, VarStmt, WhileStmt,
@@ -26,7 +26,7 @@ impl Parser {
 }
 
 impl Parser {
-    pub fn parse(&mut self) -> Result<Vec<Stmt>, Err> {
+    pub fn parse(&mut self) -> Result<Vec<Stmt>, LoxError> {
         let mut statements = Vec::new();
 
         while !self.is_at_end() {
@@ -36,7 +36,7 @@ impl Parser {
         Ok(statements)
     }
 
-    fn declaration(&mut self) -> Result<Stmt, Err> {
+    fn declaration(&mut self) -> Result<Stmt, LoxError> {
         let stmt = match *self.peek().get_type() {
             Class => self.class_dec(),
             Fun => {
@@ -58,7 +58,7 @@ impl Parser {
         stmt
     }
 
-    fn class_dec(&mut self) -> Result<Stmt, Err> {
+    fn class_dec(&mut self) -> Result<Stmt, LoxError> {
         self.advance(); // Consume CLASS token
 
         let name = self.consume(Identifier, "Expect class name")?;
@@ -76,7 +76,7 @@ impl Parser {
         Ok(class.into())
     }
 
-    fn fun_dec(&mut self, kind: &str) -> Result<Stmt, Err> {
+    fn fun_dec(&mut self, kind: &str) -> Result<Stmt, LoxError> {
         let name = self.consume(Identifier, format!("Expect {kind} name").as_str())?;
 
         self.consume(
@@ -89,8 +89,8 @@ impl Parser {
         if !self.check(&RightParen) {
             loop {
                 if params.len() >= 255 {
-                    ParseErr::TooManyArguments(kind.to_string(), name.get_line())
-                        .into_err()
+                    ParseError::TooManyArguments(kind.to_string())
+                        .at(name.get_line())
                         .report();
                 }
 
@@ -108,7 +108,7 @@ impl Parser {
         Ok(FunStmt::new(name, params, body, None).into())
     }
 
-    fn var_dec(&mut self) -> Result<Stmt, Err> {
+    fn var_dec(&mut self) -> Result<Stmt, LoxError> {
         let name = self.consume(Identifier, "Expected a variable name")?;
 
         let mut init = LiteralExpr::Nil.into();
@@ -120,7 +120,7 @@ impl Parser {
         Ok(VarStmt::new(name, init).into())
     }
 
-    fn statement(&mut self) -> Result<Stmt, Err> {
+    fn statement(&mut self) -> Result<Stmt, LoxError> {
         if Print == *self.peek().get_type() {
             self.peek();
         }
@@ -136,7 +136,7 @@ impl Parser {
         }
     }
 
-    fn return_stmt(&mut self) -> Result<Stmt, Err> {
+    fn return_stmt(&mut self) -> Result<Stmt, LoxError> {
         let keyword = self.advance().clone();
 
         let mut val: Expr = LiteralExpr::Nil.into();
@@ -148,7 +148,7 @@ impl Parser {
         Ok(ReturnStmt::new(keyword, val).into())
     }
 
-    fn while_stmt(&mut self) -> Result<Stmt, Err> {
+    fn while_stmt(&mut self) -> Result<Stmt, LoxError> {
         self.advance(); // Consume 'while'
         self.consume(LeftParen, "Expect '(' after 'while'.")?;
         let condition = self.expression()?;
@@ -159,7 +159,7 @@ impl Parser {
         Ok(WhileStmt::new(condition, body).into())
     }
 
-    fn for_stmt(&mut self) -> Result<Stmt, Err> {
+    fn for_stmt(&mut self) -> Result<Stmt, LoxError> {
         self.advance();
 
         self.consume(LeftParen, "Expect '(' after 'for'.")?;
@@ -202,7 +202,7 @@ impl Parser {
         Ok(stmt)
     }
 
-    fn if_stmt(&mut self) -> Result<Stmt, Err> {
+    fn if_stmt(&mut self) -> Result<Stmt, LoxError> {
         self.advance(); // Consume If token
 
         self.advance(); // Consume '(' token
@@ -219,7 +219,7 @@ impl Parser {
         Ok(IfStmt::new(cond, then_b, else_b).into())
     }
 
-    fn block_stmt(&mut self) -> Result<Stmt, Err> {
+    fn block_stmt(&mut self) -> Result<Stmt, LoxError> {
         self.consume(LeftBrace, "Expect '{' before block.")?;
 
         let mut stmts = Vec::new();
@@ -232,7 +232,7 @@ impl Parser {
         Ok(Stmt::Block(stmts))
     }
 
-    fn print_stmt(&mut self) -> Result<Stmt, Err> {
+    fn print_stmt(&mut self) -> Result<Stmt, LoxError> {
         self.advance(); // Consume 'Print' token
 
         let val = self.expression()?;
@@ -241,18 +241,18 @@ impl Parser {
         Ok(Stmt::Print(val))
     }
 
-    fn expr_stmt(&mut self) -> Result<Stmt, Err> {
+    fn expr_stmt(&mut self) -> Result<Stmt, LoxError> {
         let expr = self.expression()?;
         self.consume(Semicolon, "Expected ';' after expression.")?;
 
         Ok(Stmt::Expression(expr))
     }
 
-    fn expression(&mut self) -> Result<Expr, Err> {
+    fn expression(&mut self) -> Result<Expr, LoxError> {
         self.assignment()
     }
 
-    fn assignment(&mut self) -> Result<Expr, Err> {
+    fn assignment(&mut self) -> Result<Expr, LoxError> {
         let expr = self.logic_or()?;
 
         if !self.match_token(&[Equal]) {
@@ -264,11 +264,11 @@ impl Parser {
         if let Expr::Var(var_expr) = expr {
             Ok(AssignmentExpr::new(var_expr.name, val).into())
         } else {
-            Err(RuntimeErr::InvalidAssignment.to_err())
+            Err(RuntimeError::InvalidAssignment).at(self.previous().get_line())
         }
     }
 
-    fn logic_or(&mut self) -> Result<Expr, Err> {
+    fn logic_or(&mut self) -> Result<Expr, LoxError> {
         let mut expr = self.logic_and()?;
 
         while self.match_token(&[Or]) {
@@ -281,7 +281,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn logic_and(&mut self) -> Result<Expr, Err> {
+    fn logic_and(&mut self) -> Result<Expr, LoxError> {
         let mut expr = self.equality()?;
 
         while self.match_token(&[And]) {
@@ -294,7 +294,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn equality(&mut self) -> Result<Expr, Err> {
+    fn equality(&mut self) -> Result<Expr, LoxError> {
         let mut expression = self.comparison()?;
 
         while self.match_token(&[BangEqual, EqualEqual]) {
@@ -307,7 +307,7 @@ impl Parser {
         Ok(expression)
     }
 
-    fn comparison(&mut self) -> Result<Expr, Err> {
+    fn comparison(&mut self) -> Result<Expr, LoxError> {
         let mut expression = self.term()?;
 
         while self.match_token(&[Greater, GreaterEqual, Less, LessEqual]) {
@@ -320,7 +320,7 @@ impl Parser {
         Ok(expression)
     }
 
-    fn term(&mut self) -> Result<Expr, Err> {
+    fn term(&mut self) -> Result<Expr, LoxError> {
         let mut expression = self.factor()?;
 
         while self.match_token(&[Minus, Plus]) {
@@ -333,7 +333,7 @@ impl Parser {
         Ok(expression)
     }
 
-    fn factor(&mut self) -> Result<Expr, Err> {
+    fn factor(&mut self) -> Result<Expr, LoxError> {
         let mut expression = self.unary()?;
 
         while self.match_token(&[Star, Slash]) {
@@ -346,7 +346,7 @@ impl Parser {
         Ok(expression)
     }
 
-    fn unary(&mut self) -> Result<Expr, Err> {
+    fn unary(&mut self) -> Result<Expr, LoxError> {
         if self.match_token(&[Bang, Minus]) {
             let operator = self.previous().clone();
             let right = self.unary()?;
@@ -357,7 +357,7 @@ impl Parser {
         }
     }
 
-    fn call(&mut self) -> Result<Expr, Err> {
+    fn call(&mut self) -> Result<Expr, LoxError> {
         let mut expr = self.primary()?;
 
         loop {
@@ -374,14 +374,14 @@ impl Parser {
         Ok(expr)
     }
 
-    fn finish_call(&mut self, callee: Expr) -> Result<Expr, Err> {
+    fn finish_call(&mut self, callee: Expr) -> Result<Expr, LoxError> {
         let mut args = Vec::new();
 
         if !self.check(&RightParen) {
             loop {
                 if args.len() >= 255 {
-                    ParseErr::TooManyArguments(callee.clone().print(), self.peek().get_line())
-                        .into_err()
+                    ParseError::TooManyArguments(callee.clone().print())
+                        .at(self.peek().get_line())
                         .report();
                 }
 
@@ -400,7 +400,7 @@ impl Parser {
         Ok(call_expr.into())
     }
 
-    fn primary(&mut self) -> Result<Expr, Err> {
+    fn primary(&mut self) -> Result<Expr, LoxError> {
         let token_type = self.peek().get_type().clone();
 
         let expression = match token_type {
@@ -433,7 +433,7 @@ impl Parser {
                 GroupingExpr::new(expr).into()
             }
             Identifier => VarExpr::new(self.advance().clone()).into(),
-            _ => return Err(ParseErr::UnexpectedEOF(self.current).into_err()),
+            _ => return Err(ParseError::UnexpectedEOF).at(self.peek().get_line()),
         };
         Ok(expression)
     }
@@ -487,12 +487,12 @@ impl Parser {
         *self.peek().get_type() == EOF
     }
 
-    fn consume(&mut self, token_type: TokenType, error: &str) -> Result<Token, Err> {
+    fn consume(&mut self, token_type: TokenType, error: &str) -> Result<Token, LoxError> {
         if self.check(&token_type) {
             return Ok(self.advance().clone());
         };
 
-        Err(ParseErr::ExpectedToken(error.to_string(), self.current).into_err())
+        Err(ParseError::ExpectationFailed(error.to_string())).at(self.peek().get_line())
     }
 
     fn synchronize(&mut self) {

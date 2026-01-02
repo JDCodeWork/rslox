@@ -1,5 +1,5 @@
 use crate::{
-    errors::{Err, RuntimeErr},
+    errors::{Locate, LoxError, RuntimeError},
     lox::{ast::LiteralExpr, token::Token},
 };
 use std::collections::HashMap;
@@ -61,19 +61,19 @@ impl Environment {
         scope.values.insert(name, value);
     }
 
-    pub fn get(&self, name: &Token) -> Result<LiteralExpr, Err> {
+    pub fn get(&self, name: &Token) -> Result<LiteralExpr, LoxError> {
         let env = &self.nodes[0];
 
         if let Some(value) = env.values.get(&name.get_lexeme()) {
             return Ok(value.to_owned());
         }
 
-        Err(RuntimeErr::UndefinedVariable(name.get_lexeme(), name.get_line()).to_err())
+        Err(RuntimeError::UndefinedVariable(name.get_lexeme()).at(name.get_line()))
     }
 
-    pub fn get_at(&self, at: usize, name: &Token) -> Result<LiteralExpr, Err> {
+    pub fn get_at(&self, at: usize, name: &Token) -> Result<LiteralExpr, LoxError> {
         let Some(lit) = self.nodes[self.ancestor(at)].values.get(&name.get_lexeme()) else {
-            return Err(RuntimeErr::UndefinedVariable(name.get_lexeme(), name.get_line()).into());
+            return Err(RuntimeError::UndefinedVariable(name.get_lexeme()).at(name.get_line()));
         };
 
         Ok(lit.clone())
@@ -93,7 +93,7 @@ impl Environment {
         curr.unwrap()
     }
 
-    pub fn assign(&mut self, name: Token, value: LiteralExpr) -> Result<(), Err> {
+    pub fn assign(&mut self, name: Token, value: LiteralExpr) -> Result<(), LoxError> {
         let env = &mut self.nodes[0];
 
         if env.values.contains_key(&name.get_lexeme()) {
@@ -102,10 +102,15 @@ impl Environment {
             return Ok(());
         }
 
-        Err(RuntimeErr::UndefinedVariable(name.get_lexeme(), name.get_line()).to_err())
+        Err(RuntimeError::UndefinedVariable(name.get_lexeme()).at(name.get_line()))
     }
 
-    pub fn assign_at(&mut self, at: usize, name: Token, value: LiteralExpr) -> Result<(), Err> {
+    pub fn assign_at(
+        &mut self,
+        at: usize,
+        name: Token,
+        value: LiteralExpr,
+    ) -> Result<(), LoxError> {
         let env_id = self.ancestor(at);
         let target_env = &mut self.nodes[env_id];
         target_env.values.insert(name.get_lexeme(), value);

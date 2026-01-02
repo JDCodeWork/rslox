@@ -1,5 +1,5 @@
 use crate::{
-    errors::Err,
+    errors::LoxError,
     lox::{env::EnvId, interpreter::Interpreter},
     tools::AstPrinter,
 };
@@ -117,7 +117,7 @@ pub struct FunStmt {
 #[derive(Debug, Clone)]
 pub struct NativeFn {
     pub arity: u8,
-    pub action: fn(&mut Interpreter, Vec<LiteralExpr>) -> Result<LiteralExpr, Err>,
+    pub action: fn(&mut Interpreter, Vec<LiteralExpr>) -> Result<LiteralExpr, LoxError>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -354,7 +354,7 @@ impl FunStmt {
 impl NativeFn {
     pub fn new(
         arity: u8,
-        action: fn(&mut Interpreter, Vec<LiteralExpr>) -> Result<LiteralExpr, Err>,
+        action: fn(&mut Interpreter, Vec<LiteralExpr>) -> Result<LiteralExpr, LoxError>,
     ) -> Self {
         Self { arity, action }
     }
