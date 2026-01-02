@@ -1,8 +1,8 @@
 use crate::{
     errors::{Err, ParseErr, RuntimeErr},
     lox::ast::{
-        AssignmentExpr, CallExpr, ClassStmt, FunStmt, IfStmt, LogicalExpr, ReturnStmt, Stmt,
-        VarExpr, VarStmt, WhileStmt,
+        AssignmentExpr, CallExpr, ClassStmt, FunStmt, GetExpr, IfStmt, LogicalExpr, ReturnStmt,
+        Stmt, VarExpr, VarStmt, WhileStmt,
     },
 };
 
@@ -363,6 +363,9 @@ impl Parser {
         loop {
             if self.match_token(&[LeftParen]) {
                 expr = self.finish_call(expr)?;
+            } else if self.match_token(&[Dot]) {
+                let name = self.consume(Identifier, "Expect property name after '.'.")?;
+                expr = GetExpr::new(expr, name).into();
             } else {
                 break;
             }

@@ -57,8 +57,7 @@ pub enum ParseErr {
     #[error("Already a variable with this name in this scope.")]
     VariablesWithSameName(usize),
     #[error("Can't return from top-level code.")]
-    TopLevelReturn(usize)
-
+    TopLevelReturn(usize),
 }
 
 impl ParseErr {
@@ -69,7 +68,7 @@ impl ParseErr {
             ParseErr::TooManyArguments(_, ln) => Some(*ln),
             ParseErr::InvalidLocalVariable(ln) => Some(*ln),
             ParseErr::VariablesWithSameName(ln) => Some(*ln),
-            ParseErr::TopLevelReturn(ln) => Some(*ln)
+            ParseErr::TopLevelReturn(ln) => Some(*ln),
         }
     }
 
@@ -105,6 +104,8 @@ pub enum RuntimeErr {
     InvalidCalleeExpr,
     #[error("Expected {0} arguments, but got {1}.")]
     ArgumentCountMismatch(usize, usize),
+    #[error("Only instances have properties. at {0}")]
+    InstanceProperties(usize),
 }
 
 impl RuntimeErr {

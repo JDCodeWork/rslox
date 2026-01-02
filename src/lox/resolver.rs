@@ -4,8 +4,9 @@ use crate::{
     errors::{Err, ParseErr},
     lox::{
         ast::{
-            AssignmentExpr, BinaryExpr, CallExpr, ClassStmt, Expr, FunStmt, GroupingExpr, IfStmt,
-            LiteralExpr, LogicalExpr, ReturnStmt, Stmt, UnaryExpr, VarExpr, VarStmt, WhileStmt,
+            AssignmentExpr, BinaryExpr, CallExpr, ClassStmt, Expr, FunStmt, GetExpr, GroupingExpr,
+            IfStmt, LiteralExpr, LogicalExpr, ReturnStmt, Stmt, UnaryExpr, VarExpr, VarStmt,
+            WhileStmt,
         },
         interpreter::Interpreter,
         token::Token,
@@ -58,6 +59,7 @@ impl Resolver {
             Expr::Call(call) => self.rs_call_expr(call),
             Expr::Logical(logic) => self.rs_logic_expr(logic),
             Expr::Unary(unary) => self.rs_unary_expr(unary),
+            Expr::Get(get) => self.rs_get_expr(get),
             Expr::Literal(_) => Ok(()),
         }
     }
@@ -122,6 +124,10 @@ impl Resolver {
         self.rs_expression(&mut while_.condition)?;
 
         self.resolve(&mut while_.body)
+    }
+
+    fn rs_get_expr(&mut self, get: &mut GetExpr) -> Result<(), Err> {
+        self.rs_expression(&mut get.object)
     }
 
     fn rs_var_expr(&mut self, var: &mut VarExpr) -> Result<(), Err> {

@@ -31,6 +31,7 @@ pub enum Expr {
     Unary(UnaryExpr),
     Var(VarExpr),
     Call(CallExpr),
+    Get(GetExpr),
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -80,6 +81,17 @@ pub struct ClassStmt {
 // endregion
 
 // region: Expr structures
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ClassInstance {
+    pub dec: ClassStmt,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct GetExpr {
+    pub object: Box<Expr>,
+    pub name: Token,
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct AssignmentExpr {
@@ -141,6 +153,7 @@ pub enum LiteralExpr {
     Number(f64),
     String(String),
     Call(Callable),
+    Instance(ClassInstance),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -202,6 +215,12 @@ impl Into<Stmt> for Expr {
     }
 }
 
+impl Into<Expr> for GetExpr {
+    fn into(self) -> Expr {
+        Expr::Get(self)
+    }
+}
+
 impl Into<Expr> for CallExpr {
     fn into(self) -> Expr {
         Expr::Call(self)
@@ -253,6 +272,12 @@ impl Into<Stmt> for LiteralExpr {
 impl Into<Callable> for FunStmt {
     fn into(self) -> Callable {
         Callable::User(self)
+    }
+}
+
+impl Into<LiteralExpr> for ClassInstance {
+    fn into(self) -> LiteralExpr {
+        LiteralExpr::Instance(self)
     }
 }
 
@@ -335,6 +360,15 @@ impl NativeFn {
     }
 }
 
+impl GetExpr {
+    pub fn new(object: Expr, name: Token) -> Self {
+        Self {
+            object: Box::new(object),
+            name,
+        }
+    }
+}
+
 impl CallExpr {
     pub fn new(callee: Expr, paren: Token, args: Vec<Expr>) -> Self {
         Self {
@@ -368,6 +402,12 @@ impl BinaryExpr {
             operator,
             right: Box::new(right),
         }
+    }
+}
+
+impl ClassInstance {
+    pub fn new(dec: ClassStmt) -> Self {
+        Self { dec }
     }
 }
 
@@ -476,6 +516,9 @@ impl Callable {
 impl Expr {
     pub fn print(self) -> String {
         match self {
+            Expr::Get(get_expr) => {
+                format!("(get {})", get_expr.name)
+            }
             Expr::Call(call_expr) => {
                 let CallExpr {
                     callee,
@@ -531,6 +574,7 @@ impl Expr {
                 LiteralExpr::Number(num) => num.to_string(),
                 LiteralExpr::String(str) => str.to_string(),
                 LiteralExpr::Call(call_expr) => call_expr.print(),
+                LiteralExpr::Instance(instance) => format!("class instance {}", instance.dec.name),
             },
             Expr::Unary(unary) => {
                 let UnaryExpr { operator, right } = unary;

@@ -124,6 +124,15 @@ impl Interpreter {
         Ok(ExecResult::Normal)
     }
 
+    fn get_expr(&mut self, get: GetExpr) -> Result<LiteralExpr, Err> {
+        let object = self.evaluate(*get.object)?;
+        if let LiteralExpr::Instance(instance) = object {
+            return Ok(instance.get(get.name.get_lexeme().to_string())?);
+        }
+
+        Err(RuntimeErr::InstanceProperties(get.name.get_line()).to_err())
+    }
+
     fn call_expr(&mut self, call: CallExpr) -> Result<LiteralExpr, Err> {
         let callee = self.evaluate(*call.callee)?;
 
@@ -267,6 +276,7 @@ impl Interpreter {
             LiteralExpr::String(ref value) => Ok(!value.is_empty()),
             LiteralExpr::Nil => Ok(false),
             LiteralExpr::Call(_) => Ok(true),
+            LiteralExpr::Instance(_) => Ok(true),
         }
     }
 
@@ -291,6 +301,7 @@ impl Interpreter {
             Expr::Assign(assign) => self.assign_expr(assign),
             Expr::Logical(logical) => self.logical_expr(logical),
             Expr::Call(call) => self.call_expr(call),
+            Expr::Get(get) => self.get_expr(get),
         }
     }
 
@@ -334,7 +345,7 @@ impl Callable {
         match self {
             Callable::User(fn_) => fn_.arity(),
             Callable::Native(fn_) => fn_.arity as usize,
-            Callable::Class(_) => 0,
+            Callable::Class(class) => class.arity(),
         }
     }
 
@@ -346,8 +357,26 @@ impl Callable {
         match self {
             Callable::User(fn_) => fn_.call(exec, args),
             Callable::Native(fn_) => (fn_.action)(exec, args),
-            Callable::Class(_) => Ok(LiteralExpr::Nil),
+            Callable::Class(constructor) => constructor.call(exec, args),
         }
+    }
+}
+
+impl ClassInstance {
+    pub fn get(&self, name: String) -> Result<LiteralExpr, Err> {
+        todo!()
+    }
+}
+
+impl ClassStmt {
+    pub fn call(&mut self, _: &mut Interpreter, _: Vec<LiteralExpr>) -> Result<LiteralExpr, Err> {
+        let instance = ClassInstance::new(self.clone());
+
+        Ok(instance.into())
+    }
+
+    pub fn arity(&self) -> usize {
+        0
     }
 }
 
