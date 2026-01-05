@@ -2,7 +2,7 @@ use crate::{
     errors::{Locate, LocateResult, LoxError, ParseError, RuntimeError},
     lox::ast::{
         AssignmentExpr, CallExpr, ClassStmt, FunStmt, GetExpr, IfStmt, LogicalExpr, ReturnStmt,
-        SetExpr, Stmt, VarExpr, VarStmt, WhileStmt,
+        SetExpr, Stmt, ThisExpr, VarExpr, VarStmt, WhileStmt,
     },
 };
 
@@ -37,7 +37,7 @@ impl Parser {
     }
 
     fn declaration(&mut self) -> Result<Stmt, LoxError> {
-        let stmt = match *self.peek().get_type() {
+        let stmt = match self.peek().type_ {
             Class => self.class_dec(),
             Fun => {
                 self.advance(); // Consume FUN token
@@ -90,7 +90,7 @@ impl Parser {
             loop {
                 if params.len() >= 255 {
                     ParseError::TooManyArguments(kind.to_string())
-                        .at(name.get_line())
+                        .at(name.line)
                         .report();
                 }
 
@@ -121,11 +121,11 @@ impl Parser {
     }
 
     fn statement(&mut self) -> Result<Stmt, LoxError> {
-        if Print == *self.peek().get_type() {
+        if Print == self.peek().type_ {
             self.peek();
         }
 
-        match *self.peek().get_type() {
+        match self.peek().type_ {
             Print => self.print_stmt(),
             LeftBrace => self.block_stmt(),
             If => self.if_stmt(),
@@ -266,7 +266,7 @@ impl Parser {
         } else if let Expr::Get(get_expr) = expr {
             Ok(SetExpr::new(*get_expr.object, get_expr.name, val).into())
         } else {
-            Err(RuntimeError::InvalidAssignment).at(self.previous().get_line())
+            Err(RuntimeError::InvalidAssignment).at(self.previous().line)
         }
     }
 
@@ -383,7 +383,7 @@ impl Parser {
             loop {
                 if args.len() >= 255 {
                     ParseError::TooManyArguments(callee.clone().print())
-                        .at(self.peek().get_line())
+                        .at(self.peek().line)
                         .report();
                 }
 
@@ -403,7 +403,7 @@ impl Parser {
     }
 
     fn primary(&mut self) -> Result<Expr, LoxError> {
-        let token_type = self.peek().get_type().clone();
+        let token_type = self.peek().type_.clone();
 
         let expression = match token_type {
             False => {
@@ -434,8 +434,9 @@ impl Parser {
 
                 GroupingExpr::new(expr).into()
             }
+            This => ThisExpr::new(self.advance().clone()).into(),
             Identifier => VarExpr::new(self.advance().clone()).into(),
-            _ => return Err(ParseError::UnexpectedEOF).at(self.peek().get_line()),
+            _ => return Err(ParseError::UnexpectedEOF).at(self.peek().line),
         };
         Ok(expression)
     }
@@ -455,7 +456,7 @@ impl Parser {
         if self.is_at_end() {
             false
         } else {
-            self.peek().get_type() == token_type
+            &self.peek().type_ == token_type
         }
     }
 
@@ -486,7 +487,7 @@ impl Parser {
     }
 
     fn is_at_end(&self) -> bool {
-        *self.peek().get_type() == EOF
+        self.peek().type_ == EOF
     }
 
     fn consume(&mut self, token_type: TokenType, error: &str) -> Result<Token, LoxError> {
@@ -494,18 +495,18 @@ impl Parser {
             return Ok(self.advance().clone());
         };
 
-        Err(ParseError::ExpectationFailed(error.to_string())).at(self.peek().get_line())
+        Err(ParseError::ExpectationFailed(error.to_string())).at(self.peek().line)
     }
 
     fn synchronize(&mut self) {
         self.advance();
 
         while !self.is_at_end() {
-            if self.previous().get_type() == &Semicolon {
+            if self.previous().type_ == Semicolon {
                 return;
             }
 
-            match *self.peek().get_type() {
+            match self.peek().type_ {
                 Class | Fun | Var | For | If | While | Print | Return => {
                     return;
                 }

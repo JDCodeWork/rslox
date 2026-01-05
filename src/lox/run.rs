@@ -139,17 +139,26 @@ fn debug_show_ast(tokens: Vec<Token>) {
 
     for token in tokens {
         tokens_by_line
-            .entry(token.get_line() as usize)
+            .entry(token.line as usize)
             .or_default()
             .push(token);
     }
 
-    for (line, line_tokens) in tokens_by_line {
+    for (line, mut line_tokens) in tokens_by_line {
         // Skip empty lines or lines with only EOF token
         if line_tokens.is_empty()
-            || (line_tokens.len() == 1 && *line_tokens[0].get_type() == TokenType::EOF)
+            || (line_tokens.len() == 1 && line_tokens[0].type_ == TokenType::EOF)
         {
             continue;
+        }
+
+        // Ensure the line ends with an EOF token to prevent parser stack overflow
+        if line_tokens
+            .last()
+            .map(|t| t.type_ != TokenType::EOF)
+            .unwrap_or(true)
+        {
+            line_tokens.push(Token::new(TokenType::EOF, "".to_string(), line));
         }
 
         let mut parser = Parser::new(line_tokens.clone());

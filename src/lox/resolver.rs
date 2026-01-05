@@ -5,18 +5,25 @@ use crate::{
     lox::{
         ast::{
             AssignmentExpr, BinaryExpr, CallExpr, ClassStmt, Expr, FunStmt, GetExpr, GroupingExpr,
-            IfStmt, LiteralExpr, LogicalExpr, ReturnStmt, SetExpr, Stmt, UnaryExpr, VarExpr,
-            VarStmt, WhileStmt,
+            IfStmt, LiteralExpr, LogicalExpr, ReturnStmt, SetExpr, Stmt, ThisExpr, UnaryExpr,
+            VarExpr, VarStmt, WhileStmt,
         },
         interpreter::Interpreter,
         token::Token,
     },
 };
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+enum FunctionType {
+    Function,
+    Method,
+    None,
+}
+
 pub struct Resolver {
     pub interpreter: Interpreter,
     scopes: Vec<HashMap<String, bool>>,
-    in_function: bool,
+    function: FunctionType,
 }
 
 impl Resolver {
@@ -24,7 +31,7 @@ impl Resolver {
         Self {
             interpreter,
             scopes: Vec::new(),
-            in_function: false,
+            function: FunctionType::None,
         }
     }
 
@@ -61,25 +68,40 @@ impl Resolver {
             Expr::Unary(unary) => self.rs_unary_expr(unary),
             Expr::Get(get) => self.rs_get_expr(get),
             Expr::Set(set) => self.rs_set_expr(set),
+            Expr::This(this) => self.rs_this_expr(this),
             Expr::Literal(_) => Ok(()),
         }
     }
 
     fn rs_class_stmt(&mut self, class: &mut ClassStmt) -> Result<(), LoxError> {
         self.declare(&class.name)?;
-        self.define(&class.name)
+        self.define(&class.name)?;
+
+        self.begin_scope();
+
+        if let Some(scope) = self.scopes.last_mut() {
+            scope.insert("this".to_string(), true);
+        }
+
+        for method in &mut class.methods {
+            self.rs_function(method, FunctionType::Method)?;
+        }
+
+        self.end_scope();
+
+        Ok(())
     }
 
     fn rs_fun_stmt(&mut self, fun: &mut FunStmt) -> Result<(), LoxError> {
         self.declare(&fun.name)?;
         self.define(&fun.name)?;
 
-        self.rs_function(fun)
+        self.rs_function(fun, FunctionType::Function)
     }
 
-    fn rs_function(&mut self, fun: &mut FunStmt) -> Result<(), LoxError> {
-        let enclosing_fn = self.in_function;
-        self.in_function = true;
+    fn rs_function(&mut self, fun: &mut FunStmt, type_: FunctionType) -> Result<(), LoxError> {
+        let enclosing_fn = self.function;
+        self.function = type_;
 
         self.begin_scope();
         for param in &fun.params {
@@ -89,7 +111,7 @@ impl Resolver {
         self.resolve(&mut fun.body)?;
         self.end_scope();
 
-        self.in_function = enclosing_fn;
+        self.function = enclosing_fn;
 
         Ok(())
     }
@@ -114,8 +136,8 @@ impl Resolver {
     }
 
     fn rs_return_stmt(&mut self, return_: &mut ReturnStmt) -> Result<(), LoxError> {
-        if !self.in_function {
-            return Err(ParseError::TopLevelReturn.at(return_.keyword.get_line()));
+        if self.function == FunctionType::None {
+            return Err(ParseError::TopLevelReturn.at(return_.keyword.line));
         }
 
         self.rs_expression(&mut return_.value)
@@ -125,6 +147,10 @@ impl Resolver {
         self.rs_expression(&mut while_.condition)?;
 
         self.resolve(&mut while_.body)
+    }
+
+    fn rs_this_expr(&mut self, this: &mut ThisExpr) -> Result<(), LoxError> {
+        self.resolve_local("this", &mut this.depth)
     }
 
     fn rs_set_expr(&mut self, set: &mut SetExpr) -> Result<(), LoxError> {
@@ -138,20 +164,20 @@ impl Resolver {
 
     fn rs_var_expr(&mut self, var: &mut VarExpr) -> Result<(), LoxError> {
         if let Some(scope) = self.scopes.last() {
-            if let Some(initialized) = scope.get(&var.name.get_lexeme()) {
+            if let Some(initialized) = scope.get(&var.name.lexeme) {
                 if !*initialized {
-                    return Err(ParseError::SelfReferencingInitializer.at(var.name.get_line()));
+                    return Err(ParseError::SelfReferencingInitializer.at(var.name.line));
                 }
             }
         }
 
-        self.resolve_local(&var.name, &mut var.depth)?;
+        self.resolve_local(&var.name.lexeme, &mut var.depth)?;
         Ok(())
     }
 
     fn rs_assign_expr(&mut self, assign: &mut AssignmentExpr) -> Result<(), LoxError> {
         self.rs_expression(&mut assign.value)?;
-        self.resolve_local(&assign.name, &mut assign.depth)?;
+        self.resolve_local(&assign.name.lexeme, &mut assign.depth)?;
 
         Ok(())
     }
@@ -194,9 +220,9 @@ impl Resolver {
         self.rs_expression(&mut unary.right)
     }
 
-    fn resolve_local(&mut self, name: &Token, depth: &mut Option<usize>) -> Result<(), LoxError> {
+    fn resolve_local(&mut self, name: &str, depth: &mut Option<usize>) -> Result<(), LoxError> {
         for (i, scope) in self.scopes.iter().rev().enumerate() {
-            if scope.contains_key(&name.get_lexeme()) {
+            if scope.contains_key(name) {
                 *depth = Some(i);
 
                 return Ok(());
@@ -219,11 +245,11 @@ impl Resolver {
             return Ok(());
         };
 
-        if scope.contains_key(&name.get_lexeme()) {
-            return Err(ParseError::VariableAlreadyDefined.at(name.get_line()));
+        if scope.contains_key(&name.lexeme) {
+            return Err(ParseError::VariableAlreadyDefined.at(name.line));
         }
 
-        scope.insert(name.get_lexeme(), false);
+        scope.insert(name.lexeme.clone(), false);
 
         Ok(())
     }
@@ -233,7 +259,7 @@ impl Resolver {
             return Ok(());
         };
 
-        scope.insert(name.get_lexeme(), true);
+        scope.insert(name.lexeme.clone(), true);
 
         Ok(())
     }

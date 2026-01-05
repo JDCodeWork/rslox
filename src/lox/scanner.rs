@@ -304,7 +304,7 @@ mod tests {
         assert_eq!(tokens.len(), expected_types.len());
 
         for (i, expected_type) in expected_types.iter().enumerate() {
-            assert_eq!(tokens[i].get_type(), expected_type);
+            assert_eq!(&tokens[i].type_, expected_type);
         }
     }
 
@@ -322,7 +322,7 @@ mod tests {
         ];
 
         for (i, expected_type) in expected_types.iter().enumerate() {
-            assert_eq!(tokens[i].get_type(), expected_type);
+            assert_eq!(&tokens[i].type_, expected_type);
         }
     }
 
@@ -333,12 +333,12 @@ mod tests {
 
         assert_eq!(tokens.len(), 3); // two strings + EOF
 
-        match tokens[0].get_type() {
+        match &tokens[0].type_ {
             TokenType::String(value) => assert_eq!(value, "hello"),
             _ => panic!("Expected string token"),
         }
 
-        match tokens[1].get_type() {
+        match &tokens[1].type_ {
             TokenType::String(value) => assert_eq!(value, "world with spaces"),
             _ => panic!("Expected string token"),
         }
@@ -351,18 +351,18 @@ mod tests {
 
         assert_eq!(tokens.len(), 4); // three numbers + EOF
 
-        match tokens[0].get_type() {
-            TokenType::Number(value) => assert_eq!(*value, 123.0),
+        match tokens[0].type_ {
+            TokenType::Number(value) => assert_eq!(value, 123.0),
             _ => panic!("Expected number token"),
         }
 
-        match tokens[1].get_type() {
-            TokenType::Number(value) => assert_eq!(*value, 456.789),
+        match tokens[1].type_ {
+            TokenType::Number(value) => assert_eq!(value, 456.789),
             _ => panic!("Expected number token"),
         }
 
-        match tokens[2].get_type() {
-            TokenType::Number(value) => assert_eq!(*value, 0.5),
+        match tokens[2].type_ {
+            TokenType::Number(value) => assert_eq!(value, 0.5),
             _ => panic!("Expected number token"),
         }
     }
@@ -382,7 +382,7 @@ mod tests {
         ];
 
         for (i, expected_type) in expected_types.iter().enumerate() {
-            assert_eq!(tokens[i].get_type(), expected_type);
+            assert_eq!(&tokens[i].type_, expected_type);
         }
     }
 
@@ -394,12 +394,12 @@ mod tests {
         assert_eq!(tokens.len(), 4); // three identifiers + EOF
 
         for i in 0..3 {
-            assert_eq!(tokens[i].get_type(), &TokenType::Identifier);
+            assert_eq!(&tokens[i].type_, &TokenType::Identifier);
         }
 
-        assert_eq!(tokens[0].get_lexeme(), "variable_name");
-        assert_eq!(tokens[1].get_lexeme(), "function123");
-        assert_eq!(tokens[2].get_lexeme(), "_underscore");
+        assert_eq!(tokens[0].lexeme, "variable_name");
+        assert_eq!(tokens[1].lexeme, "function123");
+        assert_eq!(tokens[2].lexeme, "_underscore");
     }
 
     #[test]
@@ -409,8 +409,8 @@ mod tests {
 
         assert_eq!(tokens.len(), 2); // number + EOF (comment ignored)
 
-        match tokens[0].get_type() {
-            TokenType::Number(value) => assert_eq!(*value, 123.0),
+        match tokens[0].type_ {
+            TokenType::Number(value) => assert_eq!(value, 123.0),
             _ => panic!("Expected number token"),
         }
     }
@@ -422,8 +422,8 @@ mod tests {
 
         assert_eq!(tokens.len(), 2); // number + EOF (comment ignored)
 
-        match tokens[0].get_type() {
-            TokenType::Number(value) => assert_eq!(*value, 456.0),
+        match tokens[0].type_ {
+            TokenType::Number(value) => assert_eq!(value, 456.0),
             _ => panic!("Expected number token"),
         }
     }
@@ -433,9 +433,9 @@ mod tests {
         let mut scanner = Scanner::new("123\n456\n789".to_string());
         let tokens = scanner.scan_tokens();
 
-        assert_eq!(tokens[0].get_line(), 1);
-        assert_eq!(tokens[1].get_line(), 2);
-        assert_eq!(tokens[2].get_line(), 3);
+        assert_eq!(tokens[0].line, 1);
+        assert_eq!(tokens[1].line, 2);
+        assert_eq!(tokens[2].line, 3);
     }
 
     #[test]
@@ -457,7 +457,7 @@ mod tests {
         ];
 
         for (i, expected_type) in expected_types.iter().enumerate() {
-            assert_eq!(tokens[i].get_type(), expected_type);
+            assert_eq!(&tokens[i].type_, expected_type);
         }
     }
 }

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt;
 
 use crate::{
     errors::LoxError,
@@ -31,6 +32,7 @@ pub enum Expr {
     Grouping(GroupingExpr),
     Literal(LiteralExpr),
     Unary(UnaryExpr),
+    This(ThisExpr),
     Var(VarExpr),
     Call(CallExpr),
     Get(GetExpr),
@@ -40,7 +42,7 @@ pub enum Expr {
 #[derive(PartialEq, Debug, Clone)]
 pub enum Callable {
     User(FunStmt),
-    Class(ClassStmt),
+    Class(ClassDec),
     Native(NativeFn),
 }
 
@@ -81,14 +83,26 @@ pub struct ClassStmt {
     pub methods: Vec<FunStmt>,
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct ClassDec {
+    pub name: String,
+    pub methods: HashMap<String, FunStmt>,
+}
+
 // endregion
 
 // region: Expr structures
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ClassInstance {
-    pub dec: ClassStmt,
+    pub dec: ClassDec,
     pub fields: HashMap<String, LiteralExpr>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ThisExpr {
+    pub keyword: Token,
+    pub depth: Option<usize>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -179,11 +193,222 @@ pub struct UnaryExpr {
 
 // region: Into trait implementation
 
-impl Into<LiteralExpr> for ClassStmt {
+impl Into<LiteralExpr> for ClassDec {
     fn into(self) -> LiteralExpr {
         LiteralExpr::Call(Callable::Class(self))
     }
 }
+
+// region: Display implementation
+
+fn pad(f: &mut fmt::Formatter<'_>, level: usize) -> fmt::Result {
+    write!(f, "{:indent$}", "", indent = level * 2)
+}
+
+impl fmt::Display for Stmt {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.fmt_indented(f, 0)
+    }
+}
+
+impl Stmt {
+    pub fn fmt_indented(&self, f: &mut fmt::Formatter<'_>, level: usize) -> fmt::Result {
+        match self {
+            Stmt::Expression(expr) => {
+                pad(f, level)?;
+                writeln!(f, "ExprStmt")?;
+                expr.fmt_indented(f, level + 1)
+            }
+            Stmt::Print(expr) => {
+                pad(f, level)?;
+                writeln!(f, "Print")?;
+                expr.fmt_indented(f, level + 1)
+            }
+            Stmt::Var(v) => {
+                pad(f, level)?;
+                writeln!(f, "Var {}", v.name.lexeme)?;
+                v.val.fmt_indented(f, level + 1)
+            }
+            Stmt::If(s) => {
+                pad(f, level)?;
+                writeln!(f, "If")?;
+                pad(f, level + 1)?;
+                writeln!(f, "Condition:")?;
+                s.condition.fmt_indented(f, level + 2)?;
+                pad(f, level + 1)?;
+                writeln!(f, "Then:")?;
+                s.then_b.fmt_indented(f, level + 2)?;
+                if let Stmt::Block(b) = &*s.else_b {
+                    if b.is_empty() {
+                        return Ok(());
+                    }
+                }
+                pad(f, level + 1)?;
+                writeln!(f, "Else:")?;
+                s.else_b.fmt_indented(f, level + 2)
+            }
+            Stmt::While(s) => {
+                pad(f, level)?;
+                writeln!(f, "While")?;
+                pad(f, level + 1)?;
+                writeln!(f, "Condition:")?;
+                s.condition.fmt_indented(f, level + 2)?;
+                pad(f, level + 1)?;
+                writeln!(f, "Body:")?;
+                s.body.fmt_indented(f, level + 2)
+            }
+            Stmt::Function(f_stmt) => {
+                pad(f, level)?;
+                writeln!(f, "Fun {}", f_stmt.name.lexeme)?;
+                pad(f, level + 1)?;
+                writeln!(
+                    f,
+                    "Params: {:?}",
+                    f_stmt.params.iter().map(|t| &t.lexeme).collect::<Vec<_>>()
+                )?;
+                f_stmt.body.fmt_indented(f, level + 1)
+            }
+            Stmt::Block(stmts) => {
+                pad(f, level)?;
+                writeln!(f, "Block")?;
+                for stmt in stmts {
+                    stmt.fmt_indented(f, level + 1)?;
+                }
+                Ok(())
+            }
+            Stmt::Return(r) => {
+                pad(f, level)?;
+                writeln!(f, "Return")?;
+                r.value.fmt_indented(f, level + 1)
+            }
+            Stmt::Class(c) => {
+                pad(f, level)?;
+                writeln!(f, "Class {}", c.name.lexeme)?;
+                for method in &c.methods {
+                    pad(f, level + 1)?;
+                    writeln!(f, "Method {}", method.name.lexeme)?;
+                    method.body.fmt_indented(f, level + 2)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+impl fmt::Display for Expr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.fmt_indented(f, 0)
+    }
+}
+
+impl Expr {
+    pub fn fmt_indented(&self, f: &mut fmt::Formatter<'_>, level: usize) -> fmt::Result {
+        match self {
+            Expr::Assign(a) => {
+                pad(f, level)?;
+                writeln!(f, "Assign {} (depth: {:?})", a.name.lexeme, a.depth)?;
+                a.value.fmt_indented(f, level + 1)
+            }
+            Expr::Binary(b) => {
+                pad(f, level)?;
+                writeln!(f, "Binary {}", b.operator.lexeme)?;
+                b.left.fmt_indented(f, level + 1)?;
+                b.right.fmt_indented(f, level + 1)
+            }
+            Expr::Logical(l) => {
+                pad(f, level)?;
+                writeln!(f, "Logical {}", l.operator.lexeme)?;
+                l.left.fmt_indented(f, level + 1)?;
+                l.right.fmt_indented(f, level + 1)
+            }
+            Expr::Grouping(g) => {
+                pad(f, level)?;
+                writeln!(f, "Group")?;
+                g.expression.fmt_indented(f, level + 1)
+            }
+            Expr::Literal(l) => {
+                pad(f, level)?;
+                write!(f, "Literal ")?;
+                l.fmt_indented(f, level)
+            }
+            Expr::Unary(u) => {
+                pad(f, level)?;
+                writeln!(f, "Unary {}", u.operator.lexeme)?;
+                u.right.fmt_indented(f, level + 1)
+            }
+            Expr::This(t) => {
+                pad(f, level)?;
+                writeln!(f, "This (depth: {:?})", t.depth)
+            }
+            Expr::Var(v) => {
+                pad(f, level)?;
+                writeln!(f, "Var {} (depth: {:?})", v.name.lexeme, v.depth)
+            }
+            Expr::Call(c) => {
+                pad(f, level)?;
+                writeln!(f, "Call")?;
+                c.callee.fmt_indented(f, level + 1)?;
+                for arg in &c.args {
+                    arg.fmt_indented(f, level + 1)?;
+                }
+                Ok(())
+            }
+            Expr::Get(g) => {
+                pad(f, level)?;
+                writeln!(f, "Get {}", g.name.lexeme)?;
+                g.object.fmt_indented(f, level + 1)
+            }
+            Expr::Set(s) => {
+                pad(f, level)?;
+                writeln!(f, "Set {}", s.name.lexeme)?;
+                s.object.fmt_indented(f, level + 1)?;
+                s.value.fmt_indented(f, level + 1)
+            }
+        }
+    }
+}
+
+impl fmt::Display for LiteralExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            LiteralExpr::Nil => write!(f, "nil"),
+            LiteralExpr::Boolean(b) => write!(f, "{}", b),
+            LiteralExpr::Number(n) => write!(f, "{}", n),
+            LiteralExpr::String(s) => write!(f, "\"{}\"", s),
+            LiteralExpr::Call(_) => write!(f, "<callable>"),
+            LiteralExpr::Instance(i) => write!(f, "<instance {}>", i.dec.name),
+        }
+    }
+}
+
+impl LiteralExpr {
+    pub fn fmt_indented(&self, f: &mut fmt::Formatter<'_>, level: usize) -> fmt::Result {
+        match self {
+            LiteralExpr::Call(Callable::User(fun)) => {
+                writeln!(f, "<fn {}>", fun.name.lexeme)?;
+                pad(f, level + 1)?;
+                writeln!(
+                    f,
+                    "params: {:?}",
+                    fun.params.iter().map(|t| &t.lexeme).collect::<Vec<_>>()
+                )?;
+                fun.body.fmt_indented(f, level + 1)
+            }
+            LiteralExpr::Instance(i) => {
+                writeln!(f, "{}", self)?;
+                for (k, v) in &i.fields {
+                    pad(f, level + 1)?;
+                    write!(f, "{}: ", k)?;
+                    v.fmt_indented(f, level + 1)?;
+                }
+                Ok(())
+            }
+            _ => writeln!(f, "{}", self),
+        }
+    }
+}
+
+// endregion
 
 impl Into<Stmt> for ClassStmt {
     fn into(self) -> Stmt {
@@ -223,6 +448,12 @@ impl Into<Stmt> for WhileStmt {
 impl Into<Stmt> for Expr {
     fn into(self) -> Stmt {
         Stmt::Expression(self)
+    }
+}
+
+impl Into<Expr> for ThisExpr {
+    fn into(self) -> Expr {
+        Expr::This(self)
     }
 }
 
@@ -319,6 +550,11 @@ impl Into<Expr> for VarExpr {
 // endregion
 
 // region: Implementation of new associated function
+impl ClassDec {
+    pub fn new(name: String, methods: HashMap<String, FunStmt>) -> Self {
+        Self { name, methods }
+    }
+}
 
 impl ClassStmt {
     pub fn new(name: Token, methods: Vec<FunStmt>) -> Self {
@@ -374,6 +610,15 @@ impl NativeFn {
         action: fn(&mut Interpreter, Vec<LiteralExpr>) -> Result<LiteralExpr, LoxError>,
     ) -> Self {
         Self { arity, action }
+    }
+}
+
+impl ThisExpr {
+    pub fn new(keyword: Token) -> Self {
+        Self {
+            keyword,
+            depth: None,
+        }
     }
 }
 
@@ -433,7 +678,7 @@ impl BinaryExpr {
 }
 
 impl ClassInstance {
-    pub fn new(dec: ClassStmt) -> Self {
+    pub fn new(dec: ClassDec) -> Self {
         Self {
             dec,
             fields: HashMap::new(),
@@ -475,7 +720,7 @@ impl Stmt {
     pub fn print(self) -> String {
         match self {
             Self::Class(class) => {
-                format!("(class {})", class.name.get_lexeme())
+                format!("(class {})", class.name.lexeme)
             }
             Stmt::Return(return_stmt) => {
                 format!("(return {})", return_stmt.value.print())
@@ -492,11 +737,11 @@ impl Stmt {
             Stmt::Function(fn_stmt) => {
                 format!(
                     "(fn {} ({}) {{}})",
-                    fn_stmt.name.get_lexeme(),
+                    fn_stmt.name.lexeme,
                     fn_stmt
                         .params
                         .iter()
-                        .map(|p| p.get_lexeme())
+                        .map(|p| p.lexeme.clone())
                         .collect::<Vec<_>>()
                         .join(", ")
                 )
@@ -539,13 +784,14 @@ impl Callable {
         match self {
             Callable::User(func) => Stmt::Function(func).print(),
             Callable::Native(_) => "<native>()".to_string(),
-            Callable::Class(class) => Into::<Stmt>::into(class).print(),
+            Callable::Class(class) => format!("class {}", class.name),
         }
     }
 }
 impl Expr {
     pub fn print(self) -> String {
         match self {
+            Expr::This(this_expr) => format!("(this {})", this_expr.keyword.line),
             Expr::Set(set_expr) => {
                 format!("(set {})", set_expr.name)
             }
@@ -562,7 +808,7 @@ impl Expr {
                 // Print callee concisely: if it's a simple variable, use its lexeme;
                 // otherwise use the expression's print but strip a leading "call "
                 let callee_repr = match *callee {
-                    Expr::Var(var_expr) => var_expr.name.get_lexeme().to_string(),
+                    Expr::Var(var_expr) => var_expr.name.lexeme.to_string(),
                     other => {
                         let s = other.print();
                         // strip a leading "call " that nested call printing may add
@@ -589,7 +835,7 @@ impl Expr {
                     right,
                 } = binary;
 
-                AstPrinter::parenthesize(&operator.get_lexeme(), vec![left, right])
+                AstPrinter::parenthesize(&operator.lexeme, vec![left, right])
             }
             Expr::Logical(logical) => {
                 let LogicalExpr {
@@ -598,7 +844,7 @@ impl Expr {
                     right,
                 } = logical;
 
-                AstPrinter::parenthesize(&operator.get_lexeme(), vec![left, right])
+                AstPrinter::parenthesize(&operator.lexeme, vec![left, right])
             }
             Expr::Grouping(group) => AstPrinter::parenthesize("group", vec![group.expression]),
             Expr::Literal(val) => match val {
@@ -612,16 +858,14 @@ impl Expr {
             Expr::Unary(unary) => {
                 let UnaryExpr { operator, right } = unary;
 
-                AstPrinter::parenthesize(&operator.get_lexeme(), vec![right])
+                AstPrinter::parenthesize(&operator.lexeme, vec![right])
             }
             Expr::Var(var_expr) => {
-                format!("var {}", var_expr.name.get_lexeme())
+                format!("var {}", var_expr.name.lexeme)
             }
-            Expr::Assign(assign) => format!(
-                "Assign {} to {}",
-                assign.value.print(),
-                assign.name.get_lexeme()
-            ),
+            Expr::Assign(assign) => {
+                format!("Assign {} to {}", assign.value.print(), assign.name.lexeme)
+            }
         }
     }
 }

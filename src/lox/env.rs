@@ -3,6 +3,7 @@ use crate::{
     lox::{ast::LiteralExpr, token::Token},
 };
 use std::collections::HashMap;
+use std::fmt;
 
 /**
  * Here we have a problem, in Crafting Interpreters, the Environment was implemented using a values map and a pointer to the enclosing environment, that is fine in Java
@@ -64,16 +65,19 @@ impl Environment {
     pub fn get(&self, name: &Token) -> Result<LiteralExpr, LoxError> {
         let env = &self.nodes[0];
 
-        if let Some(value) = env.values.get(&name.get_lexeme()) {
+        if let Some(value) = env.values.get(&name.lexeme.clone()) {
             return Ok(value.to_owned());
         }
 
-        Err(RuntimeError::UndefinedVariable(name.get_lexeme()).at(name.get_line()))
+        Err(RuntimeError::UndefinedVariable(name.lexeme.clone()).at(name.line))
     }
 
     pub fn get_at(&self, at: usize, name: &Token) -> Result<LiteralExpr, LoxError> {
-        let Some(lit) = self.nodes[self.ancestor(at)].values.get(&name.get_lexeme()) else {
-            return Err(RuntimeError::UndefinedVariable(name.get_lexeme()).at(name.get_line()));
+        let Some(lit) = self.nodes[self.ancestor(at)]
+            .values
+            .get(&name.lexeme.clone())
+        else {
+            return Err(RuntimeError::UndefinedVariable(name.lexeme.clone()).at(name.line));
         };
 
         Ok(lit.clone())
@@ -96,13 +100,13 @@ impl Environment {
     pub fn assign(&mut self, name: Token, value: LiteralExpr) -> Result<(), LoxError> {
         let env = &mut self.nodes[0];
 
-        if env.values.contains_key(&name.get_lexeme()) {
-            env.values.insert(name.get_lexeme(), value);
+        if env.values.contains_key(&name.lexeme.clone()) {
+            env.values.insert(name.lexeme.clone(), value);
 
             return Ok(());
         }
 
-        Err(RuntimeError::UndefinedVariable(name.get_lexeme()).at(name.get_line()))
+        Err(RuntimeError::UndefinedVariable(name.lexeme.clone()).at(name.line))
     }
 
     pub fn assign_at(
@@ -113,13 +117,14 @@ impl Environment {
     ) -> Result<(), LoxError> {
         let env_id = self.ancestor(at);
         let target_env = &mut self.nodes[env_id];
-        target_env.values.insert(name.get_lexeme(), value);
+        target_env.values.insert(name.lexeme.clone(), value);
 
         Ok(())
     }
 
     pub fn push_closure(&mut self, bindings: EnvBindings, parent: EnvId) {
         let mut new_scope = EnvNode::new();
+
         new_scope.parent = Some(parent);
         new_scope.values = bindings;
 
@@ -143,5 +148,23 @@ impl Environment {
         } else {
             self.curr_node = 0
         }
+    }
+}
+
+impl fmt::Display for Environment {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Environment (Current Node: {})", self.curr_node)?;
+        for (i, node) in self.nodes.iter().enumerate() {
+            if let Some(parent) = node.parent {
+                writeln!(f, "  [{}] Parent: {}", i, parent)?;
+            } else {
+                writeln!(f, "  [{}] Root", i)?;
+            }
+            for (key, val) in &node.values {
+                write!(f, "    {}: ", key)?;
+                val.fmt_indented(f, 2)?;
+            }
+        }
+        Ok(())
     }
 }

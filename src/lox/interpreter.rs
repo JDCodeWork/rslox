@@ -50,9 +50,22 @@ impl Interpreter {
         Ok(())
     }
 
-    fn class_statement(&mut self, class_stmt: ClassStmt) -> Result<ExecResult, LoxError> {
+    fn class_statement(&mut self, mut class_stmt: ClassStmt) -> Result<ExecResult, LoxError> {
         self.env
-            .define(class_stmt.name.get_lexeme(), class_stmt.into());
+            .define(class_stmt.name.lexeme.clone(), LiteralExpr::Nil);
+
+        let methods: HashMap<String, FunStmt> = class_stmt
+            .methods
+            .iter_mut()
+            .map(|m| {
+                m.closure = Some(self.env.curr_node);
+                (m.name.lexeme.clone(), m.clone())
+            })
+            .collect();
+
+        let class = ClassDec::new(class_stmt.name.lexeme.clone(), methods).into();
+
+        self.env.assign(class_stmt.name, class)?;
 
         Ok(ExecResult::Normal)
     }
@@ -68,7 +81,7 @@ impl Interpreter {
     }
 
     fn fun_statement(&mut self, mut fun_stmt: FunStmt) -> Result<ExecResult, LoxError> {
-        let fn_name = fun_stmt.name.get_lexeme();
+        let fn_name = fun_stmt.name.lexeme.clone();
 
         fun_stmt.closure = Some(self.env.curr_node);
 
@@ -93,7 +106,7 @@ impl Interpreter {
     fn var_statement(&mut self, var_stmt: VarStmt) -> Result<ExecResult, LoxError> {
         let value = self.evaluate(var_stmt.val)?;
 
-        self.env.define(var_stmt.name.get_lexeme(), value);
+        self.env.define(var_stmt.name.lexeme.clone(), value);
         Ok(ExecResult::Normal)
     }
 
@@ -123,10 +136,19 @@ impl Interpreter {
 
         Ok(ExecResult::Normal)
     }
+    fn this_expr(&mut self, this: ThisExpr) -> Result<LiteralExpr, LoxError> {
+        println!("{}", &self.env);
+
+        if let Some(dist) = this.depth {
+            self.env.get_at(dist, &this.keyword)
+        } else {
+            Err(RuntimeError::UndefinedVariable(String::from("this")).at(this.keyword.line))
+        }
+    }
 
     fn set_expr(&mut self, set: SetExpr) -> Result<LiteralExpr, LoxError> {
         let LiteralExpr::Instance(mut object) = self.evaluate(*set.object)? else {
-            return Err(RuntimeError::NotAnInstance.at(set.name.get_line()));
+            return Err(RuntimeError::NotAnInstance.at(set.name.line));
         };
 
         let val = self.evaluate(*set.value)?;
@@ -138,10 +160,10 @@ impl Interpreter {
     fn get_expr(&mut self, get: GetExpr) -> Result<LiteralExpr, LoxError> {
         let object = self.evaluate(*get.object)?;
         if let LiteralExpr::Instance(instance) = object {
-            return Ok(instance.get(get.name.get_lexeme().to_string())?);
+            return Ok(instance.get(&get.name, &mut self.env)?);
         }
 
-        Err(RuntimeError::NotAnInstance.at(get.name.get_line()))
+        Err(RuntimeError::NotAnInstance.at(get.name.line))
     }
 
     fn call_expr(&mut self, call: CallExpr) -> Result<LiteralExpr, LoxError> {
@@ -153,13 +175,13 @@ impl Interpreter {
         }
 
         let LiteralExpr::Call(mut callable) = callee else {
-            return Err(RuntimeError::NotCallable.at(call.paren.get_line()));
+            return Err(RuntimeError::NotCallable.at(call.paren.line));
         };
 
         if arguments.len() != callable.arity() {
             return Err(
                 RuntimeError::ArgumentCountMismatch(callable.arity(), arguments.len())
-                    .at(call.paren.get_line()),
+                    .at(call.paren.line),
             );
         }
 
@@ -196,7 +218,7 @@ impl Interpreter {
         let left_expr = self.evaluate(*binary.left)?;
         let right_expr = self.evaluate(*binary.right)?;
 
-        if *binary.operator.get_type() == TokenType::Plus {
+        if binary.operator.type_ == TokenType::Plus {
             match (left_expr, right_expr) {
                 (LiteralExpr::String(left_str), LiteralExpr::String(right_str)) => {
                     let str = format!("{left_str}{right_str}");
@@ -209,26 +231,26 @@ impl Interpreter {
                 (LiteralExpr::Number(left_num), LiteralExpr::Number(right_num)) => {
                     return Ok(LiteralExpr::Number(left_num + right_num))
                 }
-                _ => return Err(RuntimeError::InvalidBinaryOperands.at(binary.operator.get_line())),
+                _ => return Err(RuntimeError::InvalidBinaryOperands.at(binary.operator.line)),
             }
         }
 
         let left_num = match left_expr {
             LiteralExpr::Number(num) => num,
-            _ => return Err(RuntimeError::NumberExpected.at(binary.operator.get_line())),
+            _ => return Err(RuntimeError::NumberExpected.at(binary.operator.line)),
         };
 
         let right_num = match right_expr {
             LiteralExpr::Number(num) => num,
             LiteralExpr::String(ref str) => str.len() as f64,
-            _ => return Err(RuntimeError::NumberExpected.at(binary.operator.get_line())),
+            _ => return Err(RuntimeError::NumberExpected.at(binary.operator.line)),
         };
 
-        match *binary.operator.get_type() {
+        match binary.operator.type_ {
             TokenType::Minus => Ok(LiteralExpr::Number(left_num - right_num)),
             TokenType::Slash => {
                 if right_num == 0.0 {
-                    return Err(RuntimeError::DivisionByZero.at(binary.operator.get_line()));
+                    return Err(RuntimeError::DivisionByZero.at(binary.operator.line));
                 }
                 Ok(LiteralExpr::Number(left_num / right_num))
             }
@@ -252,7 +274,7 @@ impl Interpreter {
     fn logical_expr(&mut self, logical: LogicalExpr) -> Result<LiteralExpr, LoxError> {
         let left = self.evaluate(*logical.left)?;
 
-        if *logical.operator.get_type() == TokenType::Or {
+        if logical.operator.type_ == TokenType::Or {
             if Self::is_truthy(left.clone())? {
                 return Ok(left);
             }
@@ -266,11 +288,9 @@ impl Interpreter {
     fn unary_expr(&mut self, unary: UnaryExpr) -> Result<LiteralExpr, LoxError> {
         let right = self.evaluate(*unary.right)?;
 
-        match (unary.operator.get_type(), right) {
+        match (unary.operator.type_, right) {
             (TokenType::Minus, LiteralExpr::Number(num)) => Ok(LiteralExpr::Number(-num)),
-            (TokenType::Minus, _) => {
-                Err(RuntimeError::NumberExpected.at(unary.operator.get_line()))
-            }
+            (TokenType::Minus, _) => Err(RuntimeError::NumberExpected.at(unary.operator.line)),
             (TokenType::Bang, lit) => {
                 let bool_val = Interpreter::is_truthy(lit)?;
                 Ok(LiteralExpr::Boolean(!bool_val))
@@ -317,6 +337,7 @@ impl Interpreter {
             Expr::Call(call) => self.call_expr(call),
             Expr::Get(get) => self.get_expr(get),
             Expr::Set(set) => self.set_expr(set),
+            Expr::This(this) => self.this_expr(this),
         }
     }
 
@@ -378,20 +399,26 @@ impl Callable {
 }
 
 impl ClassInstance {
-    pub fn get(&self, name: String) -> Result<LiteralExpr, LoxError> {
-        let Some(val) = self.fields.get(&name) else {
-            return Err(RuntimeError::UndefinedProperty(name).at(self.dec.name.get_line()));
+    pub fn get(&self, name: &Token, env: &mut Environment) -> Result<LiteralExpr, LoxError> {
+        if let Some(val) = self.fields.get(&name.lexeme.clone()) {
+            return Ok(val.clone());
         };
 
-        Ok(val.clone())
+        if let Some(method) = &mut self.dec.find_method(name.lexeme.clone()) {
+            method.bind(self.clone(), env);
+
+            return Ok(LiteralExpr::Call(method.clone().into()));
+        };
+
+        Err(RuntimeError::UndefinedProperty(name.lexeme.clone()).at(name.line))
     }
 
     pub fn set(&mut self, name: Token, value: LiteralExpr) {
-        self.fields.insert(name.get_lexeme(), value);
+        self.fields.insert(name.lexeme.clone(), value);
     }
 }
 
-impl ClassStmt {
+impl ClassDec {
     pub fn call(
         &mut self,
         _: &mut Interpreter,
@@ -400,6 +427,10 @@ impl ClassStmt {
         let instance = ClassInstance::new(self.clone());
 
         Ok(instance.into())
+    }
+
+    pub fn find_method(&self, name: String) -> Option<FunStmt> {
+        self.methods.get(&name).cloned()
     }
 
     pub fn arity(&self) -> usize {
@@ -416,7 +447,7 @@ impl FunStmt {
         let mut fun_bindings: EnvBindings = HashMap::new();
 
         for (param, value) in self.params.iter().zip(args) {
-            fun_bindings.insert(param.get_lexeme(), value);
+            fun_bindings.insert(param.lexeme.clone(), value);
         }
 
         let stmts = match *self.body.clone() {
@@ -440,6 +471,22 @@ impl FunStmt {
         };
 
         Ok(val)
+    }
+
+    pub fn bind(&mut self, instance: ClassInstance, env: &mut Environment) {
+        let curr_node = env.curr_node;
+
+        let mut bindings: EnvBindings = HashMap::new();
+        bindings.insert("this".to_string(), instance.into());
+
+        if let Some(closure) = self.closure {
+            env.push_closure(bindings, closure);
+        } else {
+            env.push_closure(bindings, curr_node);
+        }
+
+        self.closure = Some(env.curr_node);
+        env.curr_node = curr_node;
     }
 
     pub fn arity(&self) -> usize {
