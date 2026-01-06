@@ -15,8 +15,15 @@ use crate::{
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 enum FunctionType {
+    Initializer,
     Function,
     Method,
+    None,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+enum ClassType {
+    Class,
     None,
 }
 
@@ -24,6 +31,7 @@ pub struct Resolver {
     pub interpreter: Interpreter,
     scopes: Vec<HashMap<String, bool>>,
     function: FunctionType,
+    class: ClassType,
 }
 
 impl Resolver {
@@ -32,6 +40,7 @@ impl Resolver {
             interpreter,
             scopes: Vec::new(),
             function: FunctionType::None,
+            class: ClassType::None,
         }
     }
 
@@ -74,6 +83,9 @@ impl Resolver {
     }
 
     fn rs_class_stmt(&mut self, class: &mut ClassStmt) -> Result<(), LoxError> {
+        let enclosing_class = self.class;
+        self.class = ClassType::Class;
+
         self.declare(&class.name)?;
         self.define(&class.name)?;
 
@@ -84,10 +96,18 @@ impl Resolver {
         }
 
         for method in &mut class.methods {
-            self.rs_function(method, FunctionType::Method)?;
+            let mut fn_type = FunctionType::Method;
+
+            if method.name.lexeme == String::from("init") {
+                fn_type = FunctionType::Initializer;
+            }
+
+            self.rs_function(method, fn_type)?;
         }
 
         self.end_scope();
+
+        self.class = enclosing_class;
 
         Ok(())
     }
@@ -140,6 +160,10 @@ impl Resolver {
             return Err(ParseError::TopLevelReturn.at(return_.keyword.line));
         }
 
+        if return_.value != LiteralExpr::Nil.into() && self.function == FunctionType::Initializer {
+            return Err(ParseError::ReturnInAnInitializer.at(return_.keyword.line));
+        }
+
         self.rs_expression(&mut return_.value)
     }
 
@@ -150,6 +174,10 @@ impl Resolver {
     }
 
     fn rs_this_expr(&mut self, this: &mut ThisExpr) -> Result<(), LoxError> {
+        if let ClassType::None = self.class {
+            return Err(ParseError::OutsideThis.at(this.keyword.line));
+        }
+
         self.resolve_local("this", &mut this.depth)
     }
 

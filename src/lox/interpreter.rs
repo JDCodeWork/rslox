@@ -59,6 +59,8 @@ impl Interpreter {
             .iter_mut()
             .map(|m| {
                 m.closure = Some(self.env.curr_node);
+                m.is_init = m.name.lexeme == "init".to_string();
+
                 (m.name.lexeme.clone(), m.clone())
             })
             .collect();
@@ -443,13 +445,18 @@ impl ClassInstance {
 impl ClassDec {
     pub fn call(
         &self,
-        inter: &mut Interpreter,
-        _: Vec<LiteralExpr>,
+        exec: &mut Interpreter,
+        args: Vec<LiteralExpr>,
     ) -> Result<LiteralExpr, LoxError> {
-        let obj_id = inter.heap.len();
+        let obj_id = exec.heap.len();
 
         let instance = ClassInstance::new(self.clone(), obj_id);
-        inter.heap.push(instance.into());
+        exec.heap.push(instance.into());
+
+        if let Some(mut init) = self.find_method("init".to_string()).clone() {
+            init.bind(obj_id, &mut exec.env);
+            init.call(exec, args)?;
+        }
 
         Ok(LiteralExpr::Instance(obj_id))
     }
@@ -459,7 +466,11 @@ impl ClassDec {
     }
 
     pub fn arity(&self) -> usize {
-        0
+        if let Some(init) = self.find_method("init".to_string()) {
+            init.arity()
+        } else {
+            0
+        }
     }
 }
 
@@ -491,11 +502,19 @@ impl FunStmt {
 
         exec.env.curr_node = previous;
 
-        let ExecResult::Return(val) = result? else {
-            return Ok(LiteralExpr::Nil);
-        };
+        if self.is_init {
+            if let Some(closure) = self.closure {
+                let tok = Token::new(TokenType::This, "this".to_string(), self.name.line);
 
-        Ok(val)
+                return exec.env.get_from(closure, tok);
+            }
+        }
+
+        if let ExecResult::Return(val) = result? {
+            return Ok(val);
+        }
+
+        Ok(LiteralExpr::Nil)
     }
 
     pub fn bind(&mut self, obj_id: usize, env: &mut Environment) {

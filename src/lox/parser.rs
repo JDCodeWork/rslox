@@ -105,7 +105,7 @@ impl Parser {
 
         let body = self.block_stmt()?;
 
-        Ok(FunStmt::new(name, params, body).into())
+        Ok(FunStmt::new(name, params, body, false).into())
     }
 
     fn var_dec(&mut self) -> Result<Stmt, LoxError> {

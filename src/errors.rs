@@ -82,6 +82,10 @@ pub enum ParseError {
     VariableAlreadyDefined,
     #[error("Can't return from top-level code.")]
     TopLevelReturn,
+    #[error("Can't use 'this' outside of a class.")]
+    OutsideThis,
+    #[error("Can't return a value from an initializer")]
+    ReturnInAnInitializer,
 }
 
 #[derive(Error, Debug, PartialEq)]

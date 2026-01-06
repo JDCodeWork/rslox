@@ -73,10 +73,15 @@ impl Environment {
     }
 
     pub fn get_at(&self, at: usize, name: &Token) -> Result<LiteralExpr, LoxError> {
-        let Some(lit) = self.nodes[self.ancestor(at)]
-            .values
-            .get(&name.lexeme.clone())
-        else {
+        let Some(lit) = self.nodes[self.ancestor(at)].values.get(&name.lexeme) else {
+            return Err(RuntimeError::UndefinedVariable(name.lexeme.clone()).at(name.line));
+        };
+
+        Ok(lit.clone())
+    }
+
+    pub fn get_from(&self, pos: usize, name: Token) -> Result<LiteralExpr, LoxError> {
+        let Some(lit) = self.nodes[pos].values.get(&name.lexeme) else {
             return Err(RuntimeError::UndefinedVariable(name.lexeme.clone()).at(name.line));
         };
 

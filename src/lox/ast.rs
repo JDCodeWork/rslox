@@ -137,6 +137,7 @@ pub struct ClassDec {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct FunStmt {
+    pub is_init: bool,
     pub name: Token,
     pub params: Vec<Token>,
     pub body: Box<Stmt>,
@@ -313,7 +314,8 @@ impl_new!(WhileStmt, (condition: Expr, body: Stmt), {
     body: Box::new(body)
 });
 
-impl_new!(FunStmt, (name: Token, params: Vec<Token>, body: Stmt), {
+impl_new!(FunStmt, (name: Token, params: Vec<Token>, body: Stmt, is_init: bool), {
+    is_init,
     name,
     params,
     body: Box::new(body),
