@@ -9,7 +9,47 @@ use crate::{
 
 use super::token::Token;
 
-// region: higher-level structures
+// region: Macros
+
+macro_rules! impl_into {
+    ($from:ty, $to:ty, $variant:path) => {
+        impl Into<$to> for $from {
+            fn into(self) -> $to {
+                $variant(self)
+            }
+        }
+    };
+    ($group:ty; $($from:ty => $to:path),+ $(,)?) => {
+        $( impl_into!($from, $group, $to); )*
+    };
+}
+
+macro_rules! impl_new {
+    // Pattern for custom field creation (e.g. boxing)
+    ($type:ty, ($($arg:ident : $arg_type:ty),*), { $($fields:tt)* }) => {
+        impl $type {
+            pub fn new($($arg : $arg_type),*) -> Self {
+                Self {
+                    $($fields)*
+                }
+            }
+        }
+    };
+    // Pattern for simple field mapping (arg name matches field name)
+    ($type:ty, ($($arg:ident : $arg_type:ty),*)) => {
+        impl $type {
+            pub fn new($($arg : $arg_type),*) -> Self {
+                Self {
+                    $($arg),*
+                }
+            }
+        }
+    };
+}
+
+// endregion: Macros
+
+// region: AST Enums
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum Stmt {
@@ -46,11 +86,17 @@ pub enum Callable {
     Native(NativeFn),
 }
 
-// endregion
+#[derive(PartialEq, Debug, Clone)]
+pub enum Object {
+    Callable(Callable),
+    Instance(ClassInstance),
+}
 
-// region: lower-level structures
+// endregion: AST Enums
 
-// region: Stmt structures
+// region: AST Nodes
+
+// region: Statements
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ReturnStmt {
@@ -89,15 +135,30 @@ pub struct ClassDec {
     pub methods: HashMap<String, FunStmt>,
 }
 
-// endregion
+#[derive(Debug, PartialEq, Clone)]
+pub struct FunStmt {
+    pub name: Token,
+    pub params: Vec<Token>,
+    pub body: Box<Stmt>,
+    pub closure: Option<EnvId>,
+}
 
-// region: Expr structures
+#[derive(Debug, Clone)]
+pub struct NativeFn {
+    pub arity: u8,
+    pub action: fn(&mut Interpreter, Vec<LiteralExpr>) -> Result<LiteralExpr, LoxError>,
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ClassInstance {
+    pub id: usize,
     pub dec: ClassDec,
     pub fields: HashMap<String, LiteralExpr>,
 }
+
+// endregion: Statements
+
+// region: Expressions
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ThisExpr {
@@ -132,20 +193,6 @@ pub struct VarExpr {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct FunStmt {
-    pub name: Token,
-    pub params: Vec<Token>,
-    pub body: Box<Stmt>,
-    pub closure: Option<EnvId>,
-}
-
-#[derive(Debug, Clone)]
-pub struct NativeFn {
-    pub arity: u8,
-    pub action: fn(&mut Interpreter, Vec<LiteralExpr>) -> Result<LiteralExpr, LoxError>,
-}
-
-#[derive(Debug, PartialEq, Clone)]
 pub struct CallExpr {
     pub callee: Box<Expr>,
     pub paren: Token,
@@ -177,8 +224,8 @@ pub enum LiteralExpr {
     Boolean(bool),
     Number(f64),
     String(String),
-    Call(Callable),
-    Instance(ClassInstance),
+    Call(usize),
+    Instance(usize),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -187,19 +234,299 @@ pub struct UnaryExpr {
     pub right: Box<Expr>,
 }
 
-// endregion
+// endregion: Expressions
 
-// endregion
+// endregion: AST Nodes
 
-// region: Into trait implementation
+// region: Traits: Into
+impl_into!(Stmt;
+    ClassStmt => Stmt::Class,
+    ReturnStmt => Stmt::Return,
+    FunStmt => Stmt::Function,
+    IfStmt => Stmt::If,
+    VarStmt => Stmt::Var,
+    WhileStmt => Stmt::While,
+    Expr => Stmt::Expression
+);
 
-impl Into<LiteralExpr> for ClassDec {
-    fn into(self) -> LiteralExpr {
-        LiteralExpr::Call(Callable::Class(self))
+impl_into!(Expr;
+    ThisExpr => Expr::This,
+    SetExpr => Expr::Set,
+    GetExpr => Expr::Get,
+    CallExpr => Expr::Call,
+    VarExpr => Expr::Var,
+    AssignmentExpr => Expr::Assign,
+    BinaryExpr => Expr::Binary,
+    LogicalExpr => Expr::Logical,
+    GroupingExpr => Expr::Grouping,
+    UnaryExpr => Expr::Unary,
+    LiteralExpr => Expr::Literal
+);
+
+impl Into<Stmt> for LiteralExpr {
+    fn into(self) -> Stmt {
+        Stmt::Expression(self.into())
     }
 }
 
-// region: Display implementation
+impl Into<Object> for FunStmt {
+    fn into(self) -> Object {
+        Object::Callable(Callable::User(self))
+    }
+}
+
+impl Into<Object> for NativeFn {
+    fn into(self) -> Object {
+        Object::Callable(Callable::Native(self))
+    }
+}
+
+impl Into<Object> for ClassDec {
+    fn into(self) -> Object {
+        Object::Callable(Callable::Class(self))
+    }
+}
+
+impl_into!(ClassInstance, Object, Object::Instance);
+
+// endregion: Traits: Into
+
+// region: Constructors
+impl_new!(ClassDec, (name: String, methods: HashMap<String, FunStmt>) );
+impl_new!(ClassStmt, (name: Token, methods: Vec<FunStmt>) );
+impl_new!(ReturnStmt, (keyword: Token, value: Expr) );
+impl_new!(VarStmt, (name: Token, val: Expr) );
+
+impl_new!(NativeFn, (
+    arity: u8,
+    action: fn(&mut Interpreter, Vec<LiteralExpr>) -> Result<LiteralExpr, LoxError>
+));
+
+impl_new!(IfStmt, (condition: Expr, then_b: Stmt, else_b: Stmt), {
+    condition,
+    then_b: Box::new(then_b),
+    else_b: Box::new(else_b)
+});
+
+impl_new!(WhileStmt, (condition: Expr, body: Stmt), {
+    condition,
+    body: Box::new(body)
+});
+
+impl_new!(FunStmt, (name: Token, params: Vec<Token>, body: Stmt), {
+    name,
+    params,
+    body: Box::new(body),
+    closure: None
+});
+
+impl_new!(ThisExpr, (keyword: Token), {
+    keyword,
+    depth: None,
+} );
+
+impl_new!(SetExpr, (object: Expr, name: Token, value: Expr), {
+    name,
+    object: Box::new(object),
+    value: Box::new(value),
+} );
+
+impl_new!(GetExpr, (object: Expr, name: Token), {
+    object: Box::new(object),
+    name,
+} );
+
+impl_new!(CallExpr, (callee: Expr, paren: Token, args: Vec<Expr>), {
+    callee: Box::new(callee),
+    paren,
+    args,
+});
+
+impl_new!(AssignmentExpr, (name: Token, initializer: Expr), {
+    name,
+    value: Box::new(initializer),
+    depth: None,
+});
+
+impl_new!(VarExpr, (name: Token), {
+    name,
+    depth: None
+});
+
+impl_new!(BinaryExpr, (left: Expr, operator: Token, right: Expr), {
+    operator,
+    left: Box::new(left),
+    right: Box::new(right),
+});
+
+impl_new!(ClassInstance, (dec: ClassDec, id: usize), {
+    dec,
+    fields: HashMap::new(),
+    id
+});
+
+impl_new!(LogicalExpr, (left: Expr, operator: Token, right: Expr), {
+    operator,
+    left: Box::new(left),
+    right: Box::new(right),
+});
+
+impl_new!(GroupingExpr, (expression: Expr), {
+    expression: Box::new(expression),
+});
+
+impl_new!(UnaryExpr, (operator: Token, right: Expr), {
+    operator,
+    right: Box::new(right),
+});
+
+// endregion: Constructors
+
+// region: Formatting & Display
+impl Stmt {
+    pub fn print(self) -> String {
+        match self {
+            Self::Class(class) => {
+                format!("(class {})", class.name.lexeme)
+            }
+            Stmt::Return(return_stmt) => {
+                format!("(return {})", return_stmt.value.print())
+            }
+            Stmt::Expression(expr) => expr.print(),
+            Stmt::Print(expr) => format!("(print {})", expr.print()),
+            Stmt::Var(var_stmt) => {
+                format!(
+                    "(var {} = {})",
+                    var_stmt.name.to_string(),
+                    var_stmt.val.print()
+                )
+            }
+            Stmt::Function(fn_stmt) => {
+                format!(
+                    "(fn {} ({}) {{}})",
+                    fn_stmt.name.lexeme,
+                    fn_stmt
+                        .params
+                        .iter()
+                        .map(|p| p.lexeme.clone())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            Stmt::While(while_stmt) => {
+                format!(
+                    "(while {} = {})",
+                    while_stmt.condition.print(),
+                    while_stmt.body.print()
+                )
+            }
+            Stmt::Block(stmts) => {
+                let mut result = String::from("(block");
+                for stmt in stmts {
+                    result.push_str(&format!(" {}", stmt.print()));
+                }
+                result.push(')');
+                result
+            }
+            Stmt::If(if_stmt) => {
+                let IfStmt {
+                    condition,
+                    then_b,
+                    else_b,
+                } = if_stmt;
+
+                format!(
+                    "(if {} then {} else {})",
+                    condition.print(),
+                    then_b.print(),
+                    else_b.print()
+                )
+            }
+        }
+    }
+}
+
+impl Expr {
+    pub fn print(self) -> String {
+        match self {
+            Expr::This(this_expr) => format!("(this {})", this_expr.keyword.line),
+            Expr::Set(set_expr) => {
+                format!("(set {})", set_expr.name)
+            }
+            Expr::Get(get_expr) => {
+                format!("(get {})", get_expr.name)
+            }
+            Expr::Call(call_expr) => {
+                let CallExpr {
+                    callee,
+                    paren: _,
+                    args,
+                } = call_expr;
+
+                // Print callee concisely: if it's a simple variable, use its lexeme;
+                // otherwise use the expression's print but strip a leading "call "
+                let callee_repr = match *callee {
+                    Expr::Var(var_expr) => var_expr.name.lexeme.to_string(),
+                    other => {
+                        let s = other.print();
+                        // strip a leading "call " that nested call printing may add
+                        if let Some(stripped) = s.strip_prefix("call ") {
+                            stripped.to_string()
+                        } else {
+                            s
+                        }
+                    }
+                };
+
+                let printed_args: Vec<String> = args.into_iter().map(|arg| arg.print()).collect();
+                let args = printed_args.join(", ");
+                if args.is_empty() {
+                    format!("call {}()", callee_repr)
+                } else {
+                    format!("call {}({})", callee_repr, args)
+                }
+            }
+            Expr::Binary(binary) => {
+                let BinaryExpr {
+                    left,
+                    operator,
+                    right,
+                } = binary;
+
+                AstPrinter::parenthesize(&operator.lexeme, vec![left, right])
+            }
+            Expr::Logical(logical) => {
+                let LogicalExpr {
+                    left,
+                    operator,
+                    right,
+                } = logical;
+
+                AstPrinter::parenthesize(&operator.lexeme, vec![left, right])
+            }
+            Expr::Grouping(group) => AstPrinter::parenthesize("group", vec![group.expression]),
+            Expr::Literal(val) => match val {
+                LiteralExpr::Nil => "nil".to_string(),
+                LiteralExpr::Boolean(bool) => bool.to_string(),
+                LiteralExpr::Number(num) => num.to_string(),
+                LiteralExpr::String(str) => str.to_string(),
+                LiteralExpr::Call(_) => "<callable>".to_string(),
+                LiteralExpr::Instance(_) => "<instance>".to_string(),
+            },
+            Expr::Unary(unary) => {
+                let UnaryExpr { operator, right } = unary;
+
+                AstPrinter::parenthesize(&operator.lexeme, vec![right])
+            }
+            Expr::Var(var_expr) => {
+                format!("var {}", var_expr.name.lexeme)
+            }
+            Expr::Assign(assign) => {
+                format!("Assign {} to {}", assign.value.print(), assign.name.lexeme)
+            }
+        }
+    }
+}
 
 fn pad(f: &mut fmt::Formatter<'_>, level: usize) -> fmt::Result {
     write!(f, "{:indent$}", "", indent = level * 2)
@@ -376,504 +703,29 @@ impl fmt::Display for LiteralExpr {
             LiteralExpr::Number(n) => write!(f, "{}", n),
             LiteralExpr::String(s) => write!(f, "\"{}\"", s),
             LiteralExpr::Call(_) => write!(f, "<callable>"),
-            LiteralExpr::Instance(i) => write!(f, "<instance {}>", i.dec.name),
+            LiteralExpr::Instance(_) => write!(f, "<instance>"),
         }
     }
 }
 
 impl LiteralExpr {
-    pub fn fmt_indented(&self, f: &mut fmt::Formatter<'_>, level: usize) -> fmt::Result {
+    pub fn fmt_indented(&self, f: &mut fmt::Formatter<'_>, _: usize) -> fmt::Result {
         match self {
-            LiteralExpr::Call(Callable::User(fun)) => {
-                writeln!(f, "<fn {}>", fun.name.lexeme)?;
-                pad(f, level + 1)?;
-                writeln!(
-                    f,
-                    "params: {:?}",
-                    fun.params.iter().map(|t| &t.lexeme).collect::<Vec<_>>()
-                )?;
-                fun.body.fmt_indented(f, level + 1)
-            }
-            LiteralExpr::Instance(i) => {
-                writeln!(f, "{}", self)?;
-                for (k, v) in &i.fields {
-                    pad(f, level + 1)?;
-                    write!(f, "{}: ", k)?;
-                    v.fmt_indented(f, level + 1)?;
-                }
-                Ok(())
-            }
+            LiteralExpr::Call(_) => write!(f, "<callable>"),
+            LiteralExpr::Instance(_) => write!(f, "<instance>"),
             _ => writeln!(f, "{}", self),
         }
     }
 }
 
-// endregion
+// endregion: Formatting & Display
 
-impl Into<Stmt> for ClassStmt {
-    fn into(self) -> Stmt {
-        Stmt::Class(self)
-    }
-}
-
-impl Into<Stmt> for ReturnStmt {
-    fn into(self) -> Stmt {
-        Stmt::Return(self)
-    }
-}
-
-impl Into<Stmt> for FunStmt {
-    fn into(self) -> Stmt {
-        Stmt::Function(self)
-    }
-}
-
-impl Into<Stmt> for IfStmt {
-    fn into(self) -> Stmt {
-        Stmt::If(self)
-    }
-}
-
-impl Into<Stmt> for VarStmt {
-    fn into(self) -> Stmt {
-        Stmt::Var(self)
-    }
-}
-
-impl Into<Stmt> for WhileStmt {
-    fn into(self) -> Stmt {
-        Stmt::While(self)
-    }
-}
-impl Into<Stmt> for Expr {
-    fn into(self) -> Stmt {
-        Stmt::Expression(self)
-    }
-}
-
-impl Into<Expr> for ThisExpr {
-    fn into(self) -> Expr {
-        Expr::This(self)
-    }
-}
-
-impl Into<Expr> for SetExpr {
-    fn into(self) -> Expr {
-        Expr::Set(self)
-    }
-}
-
-impl Into<Expr> for GetExpr {
-    fn into(self) -> Expr {
-        Expr::Get(self)
-    }
-}
-
-impl Into<Expr> for CallExpr {
-    fn into(self) -> Expr {
-        Expr::Call(self)
-    }
-}
-
-impl Into<Expr> for AssignmentExpr {
-    fn into(self) -> Expr {
-        Expr::Assign(self)
-    }
-}
-
-impl Into<Expr> for BinaryExpr {
-    fn into(self) -> Expr {
-        Expr::Binary(self)
-    }
-}
-
-impl Into<Expr> for LogicalExpr {
-    fn into(self) -> Expr {
-        Expr::Logical(self)
-    }
-}
-
-impl Into<Expr> for GroupingExpr {
-    fn into(self) -> Expr {
-        Expr::Grouping(self)
-    }
-}
-
-impl Into<Expr> for UnaryExpr {
-    fn into(self) -> Expr {
-        Expr::Unary(self)
-    }
-}
-
-impl Into<Expr> for LiteralExpr {
-    fn into(self) -> Expr {
-        Expr::Literal(self)
-    }
-}
-
-impl Into<Stmt> for LiteralExpr {
-    fn into(self) -> Stmt {
-        Stmt::Expression(self.into())
-    }
-}
-
-impl Into<Callable> for FunStmt {
-    fn into(self) -> Callable {
-        Callable::User(self)
-    }
-}
-
-impl Into<LiteralExpr> for ClassInstance {
-    fn into(self) -> LiteralExpr {
-        LiteralExpr::Instance(self)
-    }
-}
-
-impl Into<LiteralExpr> for Callable {
-    fn into(self) -> LiteralExpr {
-        LiteralExpr::Call(self)
-    }
-}
-
-impl Into<LiteralExpr> for NativeFn {
-    fn into(self) -> LiteralExpr {
-        LiteralExpr::Call(Callable::Native(self))
-    }
-}
-
-impl Into<Expr> for VarExpr {
-    fn into(self) -> Expr {
-        Expr::Var(self)
-    }
-}
-
-// endregion
-
-// region: Implementation of new associated function
-impl ClassDec {
-    pub fn new(name: String, methods: HashMap<String, FunStmt>) -> Self {
-        Self { name, methods }
-    }
-}
-
-impl ClassStmt {
-    pub fn new(name: Token, methods: Vec<FunStmt>) -> Self {
-        Self { name, methods }
-    }
-}
-
-impl ReturnStmt {
-    pub fn new(keyword: Token, value: Expr) -> Self {
-        Self { keyword, value }
-    }
-}
-
-impl IfStmt {
-    pub fn new(cond: Expr, then_b: Stmt, else_b: Stmt) -> Self {
-        Self {
-            condition: cond,
-            then_b: Box::new(then_b),
-            else_b: Box::new(else_b),
-        }
-    }
-}
-
-impl VarStmt {
-    pub fn new(name: Token, val: Expr) -> Self {
-        Self { name, val }
-    }
-}
-
-impl WhileStmt {
-    pub fn new(cond: Expr, body: Stmt) -> Self {
-        Self {
-            condition: cond,
-            body: Box::new(body),
-        }
-    }
-}
-
-impl FunStmt {
-    pub fn new(name: Token, params: Vec<Token>, body: Stmt, closure: Option<EnvId>) -> Self {
-        Self {
-            name,
-            params,
-            body: Box::new(body),
-            closure,
-        }
-    }
-}
-
-impl NativeFn {
-    pub fn new(
-        arity: u8,
-        action: fn(&mut Interpreter, Vec<LiteralExpr>) -> Result<LiteralExpr, LoxError>,
-    ) -> Self {
-        Self { arity, action }
-    }
-}
-
-impl ThisExpr {
-    pub fn new(keyword: Token) -> Self {
-        Self {
-            keyword,
-            depth: None,
-        }
-    }
-}
-
-impl SetExpr {
-    pub fn new(object: Expr, name: Token, value: Expr) -> Self {
-        Self {
-            object: Box::new(object),
-            name,
-            value: Box::new(value),
-        }
-    }
-}
-
-impl GetExpr {
-    pub fn new(object: Expr, name: Token) -> Self {
-        Self {
-            object: Box::new(object),
-            name,
-        }
-    }
-}
-
-impl CallExpr {
-    pub fn new(callee: Expr, paren: Token, args: Vec<Expr>) -> Self {
-        Self {
-            callee: Box::new(callee),
-            paren,
-            args,
-        }
-    }
-}
-
-impl AssignmentExpr {
-    pub fn new(name: Token, initializer: Expr) -> Self {
-        Self {
-            name,
-            value: Box::new(initializer),
-            depth: None,
-        }
-    }
-}
-
-impl VarExpr {
-    pub fn new(name: Token) -> Self {
-        Self { name, depth: None }
-    }
-}
-
-impl BinaryExpr {
-    pub fn new(left: Expr, operator: Token, right: Expr) -> Self {
-        Self {
-            left: Box::new(left),
-            operator,
-            right: Box::new(right),
-        }
-    }
-}
-
-impl ClassInstance {
-    pub fn new(dec: ClassDec) -> Self {
-        Self {
-            dec,
-            fields: HashMap::new(),
-        }
-    }
-}
-
-impl LogicalExpr {
-    pub fn new(left: Expr, operator: Token, right: Expr) -> Self {
-        Self {
-            left: Box::new(left),
-            operator,
-            right: Box::new(right),
-        }
-    }
-}
-
-impl GroupingExpr {
-    pub fn new(expression: Expr) -> Self {
-        Self {
-            expression: Box::new(expression),
-        }
-    }
-}
-
-impl UnaryExpr {
-    pub fn new(operator: Token, right: Expr) -> Self {
-        Self {
-            operator,
-            right: Box::new(right),
-        }
-    }
-}
-
-// endregion
-
-// region: implementation of printing for ast structures
-impl Stmt {
-    pub fn print(self) -> String {
-        match self {
-            Self::Class(class) => {
-                format!("(class {})", class.name.lexeme)
-            }
-            Stmt::Return(return_stmt) => {
-                format!("(return {})", return_stmt.value.print())
-            }
-            Stmt::Expression(expr) => expr.print(),
-            Stmt::Print(expr) => format!("(print {})", expr.print()),
-            Stmt::Var(var_stmt) => {
-                format!(
-                    "(var {} = {})",
-                    var_stmt.name.to_string(),
-                    var_stmt.val.print()
-                )
-            }
-            Stmt::Function(fn_stmt) => {
-                format!(
-                    "(fn {} ({}) {{}})",
-                    fn_stmt.name.lexeme,
-                    fn_stmt
-                        .params
-                        .iter()
-                        .map(|p| p.lexeme.clone())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            }
-            Stmt::While(while_stmt) => {
-                format!(
-                    "(while {} = {})",
-                    while_stmt.condition.print(),
-                    while_stmt.body.print()
-                )
-            }
-            Stmt::Block(stmts) => {
-                let mut result = String::from("(block");
-                for stmt in stmts {
-                    result.push_str(&format!(" {}", stmt.print()));
-                }
-                result.push(')');
-                result
-            }
-            Stmt::If(if_stmt) => {
-                let IfStmt {
-                    condition,
-                    then_b,
-                    else_b,
-                } = if_stmt;
-
-                format!(
-                    "(if {} then {} else {})",
-                    condition.print(),
-                    then_b.print(),
-                    else_b.print()
-                )
-            }
-        }
-    }
-}
-
-impl Callable {
-    pub fn print(self) -> String {
-        match self {
-            Callable::User(func) => Stmt::Function(func).print(),
-            Callable::Native(_) => "<native>()".to_string(),
-            Callable::Class(class) => format!("class {}", class.name),
-        }
-    }
-}
-impl Expr {
-    pub fn print(self) -> String {
-        match self {
-            Expr::This(this_expr) => format!("(this {})", this_expr.keyword.line),
-            Expr::Set(set_expr) => {
-                format!("(set {})", set_expr.name)
-            }
-            Expr::Get(get_expr) => {
-                format!("(get {})", get_expr.name)
-            }
-            Expr::Call(call_expr) => {
-                let CallExpr {
-                    callee,
-                    paren: _,
-                    args,
-                } = call_expr;
-
-                // Print callee concisely: if it's a simple variable, use its lexeme;
-                // otherwise use the expression's print but strip a leading "call "
-                let callee_repr = match *callee {
-                    Expr::Var(var_expr) => var_expr.name.lexeme.to_string(),
-                    other => {
-                        let s = other.print();
-                        // strip a leading "call " that nested call printing may add
-                        if let Some(stripped) = s.strip_prefix("call ") {
-                            stripped.to_string()
-                        } else {
-                            s
-                        }
-                    }
-                };
-
-                let printed_args: Vec<String> = args.into_iter().map(|arg| arg.print()).collect();
-                let args = printed_args.join(", ");
-                if args.is_empty() {
-                    format!("call {}()", callee_repr)
-                } else {
-                    format!("call {}({})", callee_repr, args)
-                }
-            }
-            Expr::Binary(binary) => {
-                let BinaryExpr {
-                    left,
-                    operator,
-                    right,
-                } = binary;
-
-                AstPrinter::parenthesize(&operator.lexeme, vec![left, right])
-            }
-            Expr::Logical(logical) => {
-                let LogicalExpr {
-                    left,
-                    operator,
-                    right,
-                } = logical;
-
-                AstPrinter::parenthesize(&operator.lexeme, vec![left, right])
-            }
-            Expr::Grouping(group) => AstPrinter::parenthesize("group", vec![group.expression]),
-            Expr::Literal(val) => match val {
-                LiteralExpr::Nil => "nil".to_string(),
-                LiteralExpr::Boolean(bool) => bool.to_string(),
-                LiteralExpr::Number(num) => num.to_string(),
-                LiteralExpr::String(str) => str.to_string(),
-                LiteralExpr::Call(call_expr) => call_expr.print(),
-                LiteralExpr::Instance(instance) => format!("class instance {}", instance.dec.name),
-            },
-            Expr::Unary(unary) => {
-                let UnaryExpr { operator, right } = unary;
-
-                AstPrinter::parenthesize(&operator.lexeme, vec![right])
-            }
-            Expr::Var(var_expr) => {
-                format!("var {}", var_expr.name.lexeme)
-            }
-            Expr::Assign(assign) => {
-                format!("Assign {} to {}", assign.value.print(), assign.name.lexeme)
-            }
-        }
-    }
-}
-
-// endregion
+// region: Other Traits
 
 impl PartialEq for NativeFn {
     fn eq(&self, other: &Self) -> bool {
         self.arity == other.arity
     }
 }
+
+// endregion: Other Traits

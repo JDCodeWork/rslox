@@ -15,11 +15,13 @@ pub enum ExecResult {
 /**
  * In the chapter about resolving and binding, the autor use a property called locals to map variable names to their depth in the environment stack. But the way of how rust handles ownership makes it complicated to use Tokens or Expressions as a key in the HashMap.
  *
- * To simplify the implementation, we use the depth property directly in the VarExpr and AssignExpr structures.
+ * To simplify the implementation, we use the depth property directly in the VarExpr and AssignExpr structures,
+ * also, due to problems with the ownership rules, we use the heap property to save callables and instances
  */
 #[derive(Default, Debug)]
 pub struct Interpreter {
     pub(crate) env: Environment,
+    pub(crate) heap: Vec<Object>,
 }
 
 fn clock(_: &mut Interpreter, _: Vec<LiteralExpr>) -> Result<LiteralExpr, LoxError> {
@@ -35,9 +37,7 @@ impl Interpreter {
     pub fn new() -> Self {
         let mut interpreter = Self::default();
 
-        interpreter
-            .env
-            .define(String::from("clock"), NativeFn::new(0, clock).into());
+        interpreter.assign_objet("name".to_string(), NativeFn::new(0, clock).into());
 
         interpreter
     }
@@ -63,9 +63,8 @@ impl Interpreter {
             })
             .collect();
 
-        let class = ClassDec::new(class_stmt.name.lexeme.clone(), methods).into();
-
-        self.env.assign(class_stmt.name, class)?;
+        let class = ClassDec::new(class_stmt.name.lexeme.clone(), methods);
+        self.assign_objet(class.name.clone(), class.into());
 
         Ok(ExecResult::Normal)
     }
@@ -85,8 +84,7 @@ impl Interpreter {
 
         fun_stmt.closure = Some(self.env.curr_node);
 
-        let fun: Callable = fun_stmt.into();
-        self.env.define(fn_name, fun.into());
+        self.assign_objet(fn_name, fun_stmt.into());
 
         Ok(ExecResult::Normal)
     }
@@ -137,8 +135,6 @@ impl Interpreter {
         Ok(ExecResult::Normal)
     }
     fn this_expr(&mut self, this: ThisExpr) -> Result<LiteralExpr, LoxError> {
-        println!("{}", &self.env);
-
         if let Some(dist) = this.depth {
             self.env.get_at(dist, &this.keyword)
         } else {
@@ -147,23 +143,30 @@ impl Interpreter {
     }
 
     fn set_expr(&mut self, set: SetExpr) -> Result<LiteralExpr, LoxError> {
-        let LiteralExpr::Instance(mut object) = self.evaluate(*set.object)? else {
+        let LiteralExpr::Instance(obj_id) = self.evaluate(*set.object)? else {
             return Err(RuntimeError::NotAnInstance.at(set.name.line));
         };
 
         let val = self.evaluate(*set.value)?;
-        object.set(set.name, val.clone());
+        if let Object::Instance(obj) = &mut self.heap[obj_id] {
+            obj.set(set.name, val.clone());
+        }
 
         Ok(val)
     }
 
     fn get_expr(&mut self, get: GetExpr) -> Result<LiteralExpr, LoxError> {
-        let object = self.evaluate(*get.object)?;
-        if let LiteralExpr::Instance(instance) = object {
-            return Ok(instance.get(&get.name, &mut self.env)?);
-        }
+        let LiteralExpr::Instance(obj_id) = self.evaluate(*get.object)? else {
+            return Err(RuntimeError::NotAnInstance.at(get.name.line));
+        };
 
-        Err(RuntimeError::NotAnInstance.at(get.name.line))
+        let Object::Instance(obj) = self.heap[obj_id].clone() else {
+            return Err(RuntimeError::NotAnInstance.at(get.name.line));
+        };
+
+        let val = obj.get(&get.name, self)?;
+
+        Ok(val)
     }
 
     fn call_expr(&mut self, call: CallExpr) -> Result<LiteralExpr, LoxError> {
@@ -174,18 +177,22 @@ impl Interpreter {
             arguments.push(self.evaluate(arg)?);
         }
 
-        let LiteralExpr::Call(mut callable) = callee else {
+        let LiteralExpr::Call(callable_id) = callee else {
             return Err(RuntimeError::NotCallable.at(call.paren.line));
         };
 
-        if arguments.len() != callable.arity() {
+        let Object::Callable(fn_) = self.heap[callable_id].clone() else {
+            return Err(RuntimeError::NotCallable.at(call.paren.line));
+        };
+
+        if arguments.len() != fn_.arity() {
             return Err(
-                RuntimeError::ArgumentCountMismatch(callable.arity(), arguments.len())
+                RuntimeError::ArgumentCountMismatch(fn_.arity(), arguments.len())
                     .at(call.paren.line),
             );
         }
 
-        let val = callable.call(self, arguments)?;
+        let val = fn_.call(self, arguments)?;
 
         Ok(val)
     }
@@ -374,6 +381,18 @@ impl Interpreter {
             Stmt::Class(class_stmt) => self.class_statement(class_stmt),
         }
     }
+
+    pub fn assign_objet(&mut self, name: String, obj: Object) {
+        let obj_id = self.heap.len();
+
+        let lit = match obj {
+            Object::Callable(_) => LiteralExpr::Call(obj_id),
+            Object::Instance(_) => LiteralExpr::Instance(obj_id),
+        };
+
+        self.heap.push(obj);
+        self.env.define(name, lit);
+    }
 }
 
 impl Callable {
@@ -386,7 +405,7 @@ impl Callable {
     }
 
     pub fn call(
-        &mut self,
+        &self,
         exec: &mut Interpreter,
         args: Vec<LiteralExpr>,
     ) -> Result<LiteralExpr, LoxError> {
@@ -399,15 +418,18 @@ impl Callable {
 }
 
 impl ClassInstance {
-    pub fn get(&self, name: &Token, env: &mut Environment) -> Result<LiteralExpr, LoxError> {
+    pub fn get(&self, name: &Token, inter: &mut Interpreter) -> Result<LiteralExpr, LoxError> {
         if let Some(val) = self.fields.get(&name.lexeme.clone()) {
             return Ok(val.clone());
         };
 
-        if let Some(method) = &mut self.dec.find_method(name.lexeme.clone()) {
-            method.bind(self.clone(), env);
+        if let Some(mut method) = self.dec.find_method(name.lexeme.clone()) {
+            method.bind(self.id, &mut inter.env);
 
-            return Ok(LiteralExpr::Call(method.clone().into()));
+            let method_id = inter.heap.len();
+            inter.heap.push(method.clone().into());
+
+            return Ok(LiteralExpr::Call(method_id));
         };
 
         Err(RuntimeError::UndefinedProperty(name.lexeme.clone()).at(name.line))
@@ -420,13 +442,16 @@ impl ClassInstance {
 
 impl ClassDec {
     pub fn call(
-        &mut self,
-        _: &mut Interpreter,
+        &self,
+        inter: &mut Interpreter,
         _: Vec<LiteralExpr>,
     ) -> Result<LiteralExpr, LoxError> {
-        let instance = ClassInstance::new(self.clone());
+        let obj_id = inter.heap.len();
 
-        Ok(instance.into())
+        let instance = ClassInstance::new(self.clone(), obj_id);
+        inter.heap.push(instance.into());
+
+        Ok(LiteralExpr::Instance(obj_id))
     }
 
     pub fn find_method(&self, name: String) -> Option<FunStmt> {
@@ -440,7 +465,7 @@ impl ClassDec {
 
 impl FunStmt {
     pub fn call(
-        &mut self,
+        &self,
         exec: &mut Interpreter,
         args: Vec<LiteralExpr>,
     ) -> Result<LiteralExpr, LoxError> {
@@ -473,11 +498,11 @@ impl FunStmt {
         Ok(val)
     }
 
-    pub fn bind(&mut self, instance: ClassInstance, env: &mut Environment) {
+    pub fn bind(&mut self, obj_id: usize, env: &mut Environment) {
         let curr_node = env.curr_node;
 
         let mut bindings: EnvBindings = HashMap::new();
-        bindings.insert("this".to_string(), instance.into());
+        bindings.insert("this".to_string(), LiteralExpr::Instance(obj_id));
 
         if let Some(closure) = self.closure {
             env.push_closure(bindings, closure);
