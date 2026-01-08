@@ -57,6 +57,7 @@ impl Scanner {
 impl Scanner {
     pub fn scan_tokens(&mut self) -> &Vec<Token> {
         while !self.is_at_end() {
+            // We are at the beginning of the next lexeme.
             self.start = self.current;
             self.scan_token();
         }
@@ -118,6 +119,7 @@ impl Scanner {
             }
             '/' => {
                 if self.match_char('/') {
+                    // A comment goes until the end of the line.
                     while self.peek() != '\n' && !self.is_at_end() {
                         self.advance();
                     }
@@ -125,6 +127,12 @@ impl Scanner {
                     loop {
                         if self.peek() == '*' && self.peek_next() == '/' {
                             break;
+                        }
+                        
+                        // Handle EOF inside block comment
+                         if self.is_at_end() {
+                            ScanError::UnterminatedString.at(self.line).report(); // Using UnterminatedString error for block comment? 
+                            return;
                         }
 
                         if self.peek() == '\n' {
@@ -134,10 +142,7 @@ impl Scanner {
                         self.advance();
                     }
 
-                    if self.is_at_end() {
-                        ScanError::UnterminatedString.at(self.line).report();
-                        return;
-                    }
+                  
 
                     // The closing */
                     for _ in 0..2 {
@@ -147,7 +152,7 @@ impl Scanner {
                     self.add_token(TokenType::Slash);
                 }
             }
-            ' ' | '\r' | '\t' => {}
+            ' ' | '\r' | '\t' => {} // Ignore whitespace
             '\n' => self.line += 1,
             '"' => self.string(),
             ch if ch.is_ascii_digit() => self.number(),

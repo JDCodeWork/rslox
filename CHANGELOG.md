@@ -6,7 +6,13 @@ The format is inspired by [Keep a Changelog](https://keepachangelog.com).
 
 ---
 
-## [Unreleased]
+## [1.0.0] - 2026-01-08
+
+### Added
+
+- Class declaration and constructor support.
+- Inherence with '<', and 'super'.
+- All features described in part I of Crafting Interpreters.
 
 ## [0.9.0] - 2025-12-28
 
