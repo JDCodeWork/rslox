@@ -77,6 +77,7 @@ pub enum Expr {
     Call(CallExpr),
     Get(GetExpr),
     Set(SetExpr),
+    Super(SuperExpr),
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -126,12 +127,14 @@ pub struct WhileStmt {
 #[derive(Debug, PartialEq, Clone)]
 pub struct ClassStmt {
     pub name: Token,
+    pub superclass: Option<VarExpr>,
     pub methods: Vec<FunStmt>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ClassDec {
     pub name: String,
+    pub superclass: Option<Box<ClassDec>>,
     pub methods: HashMap<String, FunStmt>,
 }
 
@@ -160,6 +163,13 @@ pub struct ClassInstance {
 // endregion: Statements
 
 // region: Expressions
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct SuperExpr {
+    pub keyword: Token,
+    pub method: Token,
+    pub depth: Option<usize>,
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ThisExpr {
@@ -261,7 +271,8 @@ impl_into!(Expr;
     LogicalExpr => Expr::Logical,
     GroupingExpr => Expr::Grouping,
     UnaryExpr => Expr::Unary,
-    LiteralExpr => Expr::Literal
+    LiteralExpr => Expr::Literal,
+    SuperExpr => Expr::Super
 );
 
 impl Into<Stmt> for LiteralExpr {
@@ -293,9 +304,23 @@ impl_into!(ClassInstance, Object, Object::Instance);
 // endregion: Traits: Into
 
 // region: Constructors
-impl_new!(ClassDec, (name: String, methods: HashMap<String, FunStmt>) );
-impl_new!(ClassStmt, (name: Token, methods: Vec<FunStmt>) );
+
+impl_new!(SuperExpr, (keyword: Token, method: Token), {
+    method,
+    keyword,
+    depth: None
+});
+
+impl_new!(ClassDec, (name: String, methods: HashMap<String, FunStmt>, superclass: Option<ClassDec> ), {
+    methods,
+    name,
+    superclass: superclass.map_or(None, |s| Some(Box::new(s)))
+} );
+
+impl_new!(ClassStmt, (name: Token, methods: Vec<FunStmt>, superclass: Option<VarExpr>) );
+
 impl_new!(ReturnStmt, (keyword: Token, value: Expr) );
+
 impl_new!(VarStmt, (name: Token, val: Expr) );
 
 impl_new!(NativeFn, (
@@ -315,11 +340,11 @@ impl_new!(WhileStmt, (condition: Expr, body: Stmt), {
 });
 
 impl_new!(FunStmt, (name: Token, params: Vec<Token>, body: Stmt, is_init: bool), {
-    is_init,
     name,
     params,
+    is_init,
+    closure: None,
     body: Box::new(body),
-    closure: None
 });
 
 impl_new!(ThisExpr, (keyword: Token), {
@@ -451,6 +476,7 @@ impl Stmt {
 impl Expr {
     pub fn print(self) -> String {
         match self {
+            Expr::Super(super_expr) => format!("(super {})", super_expr.method.lexeme),
             Expr::This(this_expr) => format!("(this {})", this_expr.keyword.line),
             Expr::Set(set_expr) => {
                 format!("(set {})", set_expr.name)
@@ -633,6 +659,10 @@ impl fmt::Display for Expr {
 impl Expr {
     pub fn fmt_indented(&self, f: &mut fmt::Formatter<'_>, level: usize) -> fmt::Result {
         match self {
+            Expr::Super(s) => {
+                pad(f, level)?;
+                writeln!(f, "Super {}", s.method)
+            }
             Expr::Assign(a) => {
                 pad(f, level)?;
                 writeln!(f, "Assign {} (depth: {:?})", a.name.lexeme, a.depth)?;

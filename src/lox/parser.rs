@@ -2,7 +2,7 @@ use crate::{
     errors::{Locate, LocateResult, LoxError, ParseError, RuntimeError},
     lox::ast::{
         AssignmentExpr, CallExpr, ClassStmt, FunStmt, GetExpr, IfStmt, LogicalExpr, ReturnStmt,
-        SetExpr, Stmt, ThisExpr, VarExpr, VarStmt, WhileStmt,
+        SetExpr, Stmt, SuperExpr, ThisExpr, VarExpr, VarStmt, WhileStmt,
     },
 };
 
@@ -62,6 +62,13 @@ impl Parser {
         self.advance(); // Consume CLASS token
 
         let name = self.consume(Identifier, "Expect class name")?;
+        let mut superclass = None;
+        if self.match_token(&[Less]) {
+            let sc_name = self.consume(Identifier, "Expect superclass name.")?;
+
+            superclass = Some(VarExpr::new(sc_name));
+        }
+
         self.consume(LeftBrace, "Expected '{' after class name.")?;
 
         let mut methods: Vec<FunStmt> = Vec::new();
@@ -72,7 +79,7 @@ impl Parser {
         }
         self.consume(RightBrace, "Expected '}' after class body.")?;
 
-        let class = ClassStmt::new(name, methods);
+        let class = ClassStmt::new(name, methods, superclass);
         Ok(class.into())
     }
 
@@ -433,6 +440,14 @@ impl Parser {
                 self.consume(RightParen, "Expect ')' after expression.")?;
 
                 GroupingExpr::new(expr).into()
+            }
+            Super => {
+                let keyword = self.advance().clone();
+
+                self.consume(Dot, "Expect '.' after 'super'.")?;
+                let method = self.consume(Identifier, "Expect superclass method name.")?;
+
+                SuperExpr::new(keyword, method).into()
             }
             This => ThisExpr::new(self.advance().clone()).into(),
             Identifier => VarExpr::new(self.advance().clone()).into(),

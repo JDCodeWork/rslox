@@ -37,7 +37,7 @@ impl Interpreter {
     pub fn new() -> Self {
         let mut interpreter = Self::default();
 
-        interpreter.assign_objet("name".to_string(), NativeFn::new(0, clock).into());
+        interpreter.assign_objet("clock".to_string(), NativeFn::new(0, clock).into());
 
         interpreter
     }
@@ -51,8 +51,32 @@ impl Interpreter {
     }
 
     fn class_statement(&mut self, mut class_stmt: ClassStmt) -> Result<ExecResult, LoxError> {
+        let mut superclass: Option<ClassDec> = None;
+        let mut super_lit: Option<LiteralExpr> = None;
+
+        if let Some(superclass_expr) = class_stmt.superclass {
+            let res = self.evaluate(superclass_expr.into())?;
+
+            if let LiteralExpr::Call(id) = res {
+                match self.heap[id].clone() {
+                    Object::Callable(Callable::Class(super_)) => {
+                        superclass = Some(super_);
+                        super_lit = Some(res);
+                    }
+                    _ => return Err(RuntimeError::SuperclassMustBeAClass.at(class_stmt.name.line)),
+                }
+            }
+        }
+
         self.env
             .define(class_stmt.name.lexeme.clone(), LiteralExpr::Nil);
+
+        if let Some(lit) = super_lit {
+            let mut env: EnvBindings = HashMap::new();
+            env.insert("super".to_string(), lit);
+
+            self.env.push_closure(env, self.env.curr_node);
+        }
 
         let methods: HashMap<String, FunStmt> = class_stmt
             .methods
@@ -65,7 +89,15 @@ impl Interpreter {
             })
             .collect();
 
-        let class = ClassDec::new(class_stmt.name.lexeme.clone(), methods);
+        let class = ClassDec::new(class_stmt.name.lexeme, methods, superclass.clone());
+        if let Some(_) = superclass {
+            let curr_env = &self.env.nodes[self.env.curr_node];
+
+            if let Some(parent) = curr_env.parent {
+                self.env.curr_node = parent
+            }
+        }
+
         self.assign_objet(class.name.clone(), class.into());
 
         Ok(ExecResult::Normal)
@@ -136,6 +168,41 @@ impl Interpreter {
 
         Ok(ExecResult::Normal)
     }
+
+    fn super_expr(&mut self, super_: SuperExpr) -> Result<LiteralExpr, LoxError> {
+        let Some(dist) = super_.depth else {
+            return Err(RuntimeError::NotAnInstance.at(super_.keyword.line));
+        };
+
+        let LiteralExpr::Call(super_id) = self.env.get_at(dist, &super_.keyword)? else {
+            return Err(RuntimeError::NotCallable.at(super_.keyword.line));
+        };
+        let Object::Callable(Callable::Class(superclass)) = self.heap[super_id].clone() else {
+            return Err(RuntimeError::NotCallable.at(super_.keyword.line));
+        };
+
+        let this_tok = TokenType::This.into_tok(super_.keyword.line);
+        let LiteralExpr::Instance(object_id) = self.env.get_at(dist - 1, &this_tok)? else {
+            return Err(RuntimeError::NotAnInstance.at(super_.keyword.line));
+        };
+
+        let Some(mut method) = superclass
+            .find_method(super_.method.lexeme.to_string())
+            .clone()
+        else {
+            return Err(
+                RuntimeError::UndefinedProperty(super_.method.lexeme.to_string())
+                    .at(super_.method.line),
+            );
+        };
+
+        method.bind(object_id, &mut self.env);
+        let method_lit = LiteralExpr::Call(self.heap.len());
+        self.heap.push(method.into());
+
+        Ok(method_lit)
+    }
+
     fn this_expr(&mut self, this: ThisExpr) -> Result<LiteralExpr, LoxError> {
         if let Some(dist) = this.depth {
             self.env.get_at(dist, &this.keyword)
@@ -347,6 +414,7 @@ impl Interpreter {
             Expr::Get(get) => self.get_expr(get),
             Expr::Set(set) => self.set_expr(set),
             Expr::This(this) => self.this_expr(this),
+            Expr::Super(super_) => self.super_expr(super_),
         }
     }
 
@@ -462,7 +530,15 @@ impl ClassDec {
     }
 
     pub fn find_method(&self, name: String) -> Option<FunStmt> {
-        self.methods.get(&name).cloned()
+        if let Some(method) = self.methods.get(&name).cloned() {
+            return Some(method);
+        }
+
+        if let Some(superclass) = self.superclass.clone() {
+            return superclass.find_method(name);
+        }
+
+        None
     }
 
     pub fn arity(&self) -> usize {
@@ -847,7 +923,7 @@ mod tests {
         let val_res = interpreter
             .env
             .get(&token_res)
-            .expect("variable lookup failed");
+            .expect("&//variable lookup failed");
         assert_eq!(val_res, LiteralExpr::Number(3.0));
     }
 
@@ -870,7 +946,6 @@ mod tests {
         assert_eq!(val_res, LiteralExpr::Number(55.0));
     }
 
-    // FIXME
     #[test]
     fn test_closure() {
         let src = "
@@ -922,5 +997,122 @@ mod tests {
         } else {
             panic!("clock() should return a number");
         }
+    }
+
+    #[test]
+    fn test_class_properties() {
+        let src = "
+            class Bagel {}
+            var bagel = Bagel();
+            bagel.topping = \"cheese\";
+            var res = bagel.topping;
+        ";
+        let interpreter = exec_src(src).expect("execution failed");
+        let token = Token::new(TokenType::Identifier, "res".to_string(), 1);
+        let val = interpreter.env.get(&token).expect("variable lookup failed");
+        assert_eq!(val, LiteralExpr::String("cheese".to_string()));
+    }
+
+    #[test]
+    fn test_class_methods() {
+        let src = "
+            class Bacon {
+                eat() {
+                    return \"Crunchy\";
+                }
+            }
+            var bacon = Bacon();
+            var res = bacon.eat();
+        ";
+        let interpreter = exec_src(src).expect("execution failed");
+        let token = Token::new(TokenType::Identifier, "res".to_string(), 1);
+        let val = interpreter.env.get(&token).expect("variable lookup failed");
+        assert_eq!(val, LiteralExpr::String("Crunchy".to_string()));
+    }
+
+    #[test]
+    fn test_this_in_methods() {
+        let src = "
+            class Cake {
+                taste() {
+                    var adjective = \"delicious\";
+                    return \"The \" + this.flavor + \" cake is \" + adjective + \"!\";
+                }
+            }
+            var cake = Cake();
+            cake.flavor = \"German chocolate\";
+            var res = cake.taste();
+        ";
+        let interpreter = exec_src(src).expect("execution failed");
+        let token = Token::new(TokenType::Identifier, "res".to_string(), 1);
+        let val = interpreter.env.get(&token).expect("variable lookup failed");
+        assert_eq!(
+            val,
+            LiteralExpr::String("The German chocolate cake is delicious!".to_string())
+        );
+    }
+
+    #[test]
+    fn test_init_constructor() {
+        let src = "
+             class Foo {
+                init() {
+                    this.val = 1;
+                }
+            }
+            var foo = Foo();
+            var res = foo.val;
+        ";
+        let interpreter = exec_src(src).expect("execution failed");
+        let token = Token::new(TokenType::Identifier, "res".to_string(), 1);
+        let val = interpreter.env.get(&token).expect("variable lookup failed");
+        assert_eq!(val, LiteralExpr::Number(1.0));
+    }
+
+    #[test]
+    fn test_inheritance() {
+        let src = "
+            class Doughnut {
+                cook() {
+                    return \"Fry until golden brown.\";
+                }
+            }
+            class BostonCream < Doughnut {}
+            var boss = BostonCream();
+            var res = boss.cook();
+        ";
+        let interpreter = exec_src(src).expect("execution failed");
+        let token = Token::new(TokenType::Identifier, "res".to_string(), 1);
+        let val = interpreter.env.get(&token).expect("variable lookup failed");
+        assert_eq!(
+            val,
+            LiteralExpr::String("Fry until golden brown.".to_string())
+        );
+    }
+
+    // TODO
+    #[test]
+    fn test_inheritance_super() {
+        let src = "
+            class Doughnut {
+                cook() {
+                    return \"Fry until golden brown.\";
+                }
+            }
+            class BostonCream < Doughnut {
+                cook() {
+                    return super.cook() + \" Pipe full of custard.\";
+                }
+            }
+            var boss = BostonCream();
+            var res = boss.cook();
+        ";
+        let interpreter = exec_src(src).expect("execution failed");
+        let token = Token::new(TokenType::Identifier, "res".to_string(), 1);
+        let val = interpreter.env.get(&token).expect("variable lookup failed");
+        assert_eq!(
+            val,
+            LiteralExpr::String("Fry until golden brown. Pipe full of custard.".to_string())
+        );
     }
 }

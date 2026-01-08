@@ -84,8 +84,14 @@ pub enum ParseError {
     TopLevelReturn,
     #[error("Can't use 'this' outside of a class.")]
     OutsideThis,
-    #[error("Can't return a value from an initializer")]
+    #[error("Can't return a value from an initializer.")]
     ReturnInAnInitializer,
+    #[error("A class can't inherit from itself.")]
+    ClassInheritFromItself,
+    #[error("Can't use 'super' outside of a class.")]
+    OutsideSuper,
+    #[error("Can't use 'super' in a class with no superclass")]
+    SuperWithNoSuperclass,
 }
 
 #[derive(Error, Debug, PartialEq)]
@@ -108,6 +114,8 @@ pub enum RuntimeError {
     ArgumentCountMismatch(usize, usize),
     #[error("Only instances have properties.")]
     NotAnInstance,
+    #[error("Superclass must be a class")]
+    SuperclassMustBeAClass,
 }
 
 #[derive(Error, Debug)]

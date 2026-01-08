@@ -5,8 +5,8 @@ use crate::{
     lox::{
         ast::{
             AssignmentExpr, BinaryExpr, CallExpr, ClassStmt, Expr, FunStmt, GetExpr, GroupingExpr,
-            IfStmt, LiteralExpr, LogicalExpr, ReturnStmt, SetExpr, Stmt, ThisExpr, UnaryExpr,
-            VarExpr, VarStmt, WhileStmt,
+            IfStmt, LiteralExpr, LogicalExpr, ReturnStmt, SetExpr, Stmt, SuperExpr, ThisExpr,
+            UnaryExpr, VarExpr, VarStmt, WhileStmt,
         },
         interpreter::Interpreter,
         token::Token,
@@ -24,6 +24,7 @@ enum FunctionType {
 #[derive(Debug, PartialEq, Clone, Copy)]
 enum ClassType {
     Class,
+    Subclass,
     None,
 }
 
@@ -68,6 +69,7 @@ impl Resolver {
 
     fn rs_expression(&mut self, expr: &mut Expr) -> Result<(), LoxError> {
         match expr {
+            Expr::Super(super_) => self.rs_super_expr(super_),
             Expr::Assign(assign) => self.rs_assign_expr(assign),
             Expr::Var(var) => self.rs_var_expr(var),
             Expr::Grouping(group) => self.rs_group_expr(group),
@@ -89,6 +91,20 @@ impl Resolver {
         self.declare(&class.name)?;
         self.define(&class.name)?;
 
+        if let Some(superclass) = &mut class.superclass {
+            if class.name.lexeme == superclass.name.lexeme {
+                return Err(ParseError::ClassInheritFromItself.at(class.name.line));
+            }
+
+            self.class = ClassType::Subclass;
+            self.rs_var_expr(superclass)?;
+
+            self.begin_scope();
+            if let Some(scope) = self.scopes.last_mut() {
+                scope.insert("super".to_string(), true);
+            }
+        }
+
         self.begin_scope();
 
         if let Some(scope) = self.scopes.last_mut() {
@@ -106,6 +122,9 @@ impl Resolver {
         }
 
         self.end_scope();
+        if let Some(_) = class.superclass {
+            self.end_scope();
+        }
 
         self.class = enclosing_class;
 
@@ -171,6 +190,16 @@ impl Resolver {
         self.rs_expression(&mut while_.condition)?;
 
         self.resolve(&mut while_.body)
+    }
+
+    fn rs_super_expr(&mut self, super_: &mut SuperExpr) -> Result<(), LoxError> {
+        if self.class == ClassType::None {
+            return Err(ParseError::OutsideSuper.at(super_.keyword.line));
+        } else if self.class != ClassType::Subclass {
+            return Err(ParseError::SuperWithNoSuperclass.at(super_.keyword.line));
+        }
+
+        self.resolve_local("super", &mut super_.depth)
     }
 
     fn rs_this_expr(&mut self, this: &mut ThisExpr) -> Result<(), LoxError> {
