@@ -96,7 +96,7 @@ impl AstGenerator {
 }
 
 impl AstGenerator {
-    pub fn gen(&mut self, output_dir: &String) {
+    pub fn gen_(&mut self, output_dir: &String) {
         // imports
         self.add_content("use super::token::Token;\n\n");
 

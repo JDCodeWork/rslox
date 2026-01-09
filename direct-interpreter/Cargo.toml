@@ -1,0 +1,9 @@
+[package]
+name = "direct-interpreter"
+version = "1.0.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.5.36", features = ["derive"] }
+owo-colors = "4.2.3"
+thiserror = "2.0.17"

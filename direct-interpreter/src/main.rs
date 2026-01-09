@@ -5,7 +5,7 @@ use cli::{
 };
 use tools::AstGenerator;
 
-use crate::lox::{handle_run_command, RunOptsCommand};
+use crate::lox::{RunOptsCommand, handle_run_command};
 
 mod cli;
 mod errors;
@@ -59,7 +59,7 @@ fn handle_gen_ast_tool(output_path: &String) {
     .map(|t| t.to_string())
     .collect();
 
-    AstGenerator::new(base_name, ast_types).gen(output_path);
+    AstGenerator::new(base_name, ast_types).gen_(output_path);
     Alert::success(String::from("CLI | AST successfully created")).show();
 }
 
