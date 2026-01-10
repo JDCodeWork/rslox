@@ -1,4 +1,4 @@
-use crate::errors::MarshalError;
+use crate::{errors::MarshalError, value::Value};
 
 pub type Byte = u8;
 
@@ -6,24 +6,37 @@ pub type Byte = u8;
 #[derive(Debug)]
 pub enum OpCode {
     Return,
+    Constant,
     _COUNT,
 }
 
 pub struct Chunk {
     pub code: Vec<Byte>,
+    pub constants: Vec<Value>,
 }
 
 impl Chunk {
     pub fn new() -> Self {
-        Self { code: Vec::new() }
+        Self {
+            code: Vec::new(),
+            constants: Vec::new(),
+        }
     }
 
-    pub fn write(&mut self, byte: Byte) {
-        self.code.push(byte);
+    /// Add a byte to code
+    pub fn write<B: Into<Byte>>(&mut self, byte: B) {
+        self.code.push(byte.into());
     }
 
     pub fn free(&mut self) {
         self.code = Vec::new();
+    }
+
+    /// Add a value to constants and returns the position
+    pub fn add_const(&mut self, value: Value) -> Byte {
+        self.constants.push(value);
+
+        (self.constants.len() - 1) as Byte
     }
 }
 
@@ -37,5 +50,11 @@ impl TryFrom<Byte> for OpCode {
 
         let opcode = unsafe { core::mem::transmute::<Byte, Self>(value) };
         Ok(opcode)
+    }
+}
+
+impl Into<Byte> for OpCode {
+    fn into(self) -> Byte {
+        self as Byte
     }
 }
