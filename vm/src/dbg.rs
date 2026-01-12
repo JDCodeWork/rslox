@@ -20,6 +20,13 @@ fn disasm_instr(offset: usize, chunk: &Chunk) -> usize {
         Ok(val) => val,
     };
 
+    let runs = &chunk.rles;
+    if offset > 0 && runs.get_ln(offset) == runs.get_ln(offset - 1) {
+        print!("   | ");
+    } else {
+        print!("{:4} ", runs.get_ln(offset));
+    }
+
     match opcode {
         OpCode::Return => simple_instr("Return", offset),
         OpCode::Constant => const_instr("Constant", offset, chunk),

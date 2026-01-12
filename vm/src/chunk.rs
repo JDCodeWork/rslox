@@ -1,4 +1,4 @@
-use crate::{errors::MarshalError, value::Value};
+use crate::{errors::MarshalError, rle::RleArr, value::Value};
 
 pub type Byte = u8;
 
@@ -11,6 +11,7 @@ pub enum OpCode {
 }
 
 pub struct Chunk {
+    pub rles: RleArr,
     pub code: Vec<Byte>,
     pub constants: Vec<Value>,
 }
@@ -18,6 +19,7 @@ pub struct Chunk {
 impl Chunk {
     pub fn new() -> Self {
         Self {
+            rles: RleArr::new(),
             code: Vec::new(),
             constants: Vec::new(),
         }
@@ -26,10 +28,7 @@ impl Chunk {
     /// Add a byte to code
     pub fn write<B: Into<Byte>>(&mut self, byte: B) {
         self.code.push(byte.into());
-    }
-
-    pub fn free(&mut self) {
-        self.code = Vec::new();
+        self.rles.incr_count();
     }
 
     /// Add a value to constants and returns the position
