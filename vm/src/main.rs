@@ -1,27 +1,23 @@
-mod chunk;
-mod dbg;
-mod errors;
-mod rle;
-mod value;
-
-use chunk::{Chunk, OpCode};
-
-use dbg::disasm_chunk;
+use vm::{
+    chunk::{Chunk, OpCode},
+    exec::VM,
+};
 
 fn main() {
     let mut c = Chunk::new();
+    let mut temp_pointer;
 
-    c.rles.add_rle();
-    let const_ = c.add_const(2.0);
+    c.rles.add_rle(); // new line
+    temp_pointer = c.add_const(2.0);
     c.write(OpCode::Constant);
-    c.write(const_);
+    c.write(temp_pointer);
 
-    c.rles.add_rle();
-    let const_ = c.add_const(2.0);
+    temp_pointer = c.add_const(4.0);
     c.write(OpCode::Constant);
-    c.write(const_);
+    c.write(temp_pointer);
+
+    c.write(OpCode::Sub);
 
     c.write(OpCode::Return);
-
-    disasm_chunk(&c, "test");
+    VM::interpret(c);
 }
