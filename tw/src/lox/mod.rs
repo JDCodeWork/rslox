@@ -2,9 +2,9 @@ pub mod ast;
 mod env;
 mod interpreter;
 mod parser;
+mod resolver;
 mod run;
 mod scanner;
 pub mod token;
-mod resolver;
 
-pub use run::{handle_run_command, RunOptsCommand};
+pub use run::{RunOptsCommand, handle_run_command};

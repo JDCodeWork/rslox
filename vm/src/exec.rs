@@ -1,3 +1,5 @@
+use crate::compiler::compile;
+
 use super::chunk::{Chunk, OpCode, Value};
 use super::dbg::{dbg_stack, disasm_instr};
 pub enum InterpretResult {
@@ -20,17 +22,13 @@ enum BinaryOp {
 }
 
 impl VM {
-    pub fn interpret(chunk: Chunk) -> InterpretResult {
-        let mut vm = VM {
-            chunk,
-            ip: 0,
-            stack: Vec::new(),
-        };
+    pub fn interpret(source: &str) -> InterpretResult {
+        compile(source);
 
-        vm.run()
+        InterpretResult::Ok
     }
 
-    fn run(&mut self) -> InterpretResult {
+    fn _run(&mut self) -> InterpretResult {
         loop {
             // region: Debugging output (--feature dbg)
             dbg_stack(&self.stack);

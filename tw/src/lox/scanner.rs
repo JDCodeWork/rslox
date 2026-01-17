@@ -128,9 +128,9 @@ impl Scanner {
                         if self.peek() == '*' && self.peek_next() == '/' {
                             break;
                         }
-                        
+
                         // Handle EOF inside block comment
-                         if self.is_at_end() {
+                        if self.is_at_end() {
                             ScanError::UnterminatedString.at(self.line).report(); // Using UnterminatedString error for block comment? 
                             return;
                         }
@@ -141,8 +141,6 @@ impl Scanner {
 
                         self.advance();
                     }
-
-                  
 
                     // The closing */
                     for _ in 0..2 {

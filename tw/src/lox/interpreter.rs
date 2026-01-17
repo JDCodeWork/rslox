@@ -305,7 +305,7 @@ impl Interpreter {
                     return Ok(LiteralExpr::String(str));
                 }
                 (LiteralExpr::Number(left_num), LiteralExpr::Number(right_num)) => {
-                    return Ok(LiteralExpr::Number(left_num + right_num))
+                    return Ok(LiteralExpr::Number(left_num + right_num));
                 }
                 _ => return Err(RuntimeError::InvalidBinaryOperands.at(binary.operator.line)),
             }

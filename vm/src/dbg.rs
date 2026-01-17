@@ -1,5 +1,6 @@
 #[allow(unused_imports)]
 use crate::chunk::{Chunk, OpCode, Value};
+use crate::scanner::Token;
 
 #[cfg(not(feature = "dbg"))]
 #[allow(unused_variables, unused_mut)]
@@ -99,4 +100,21 @@ pub fn dbg_stack(stack: &Vec<Value>) {
         print!("[ {slot} ]");
     }
     println!();
+}
+
+#[cfg(not(feature = "dbg"))]
+#[allow(dead_code, unused_variables, unused_mut)]
+#[inline]
+pub fn dbg_token(t: &Token, ln: &mut usize, source: &str) {}
+
+#[cfg(feature = "dbg")]
+pub fn dbg_token(t: &Token, ln: &mut usize, source: &str) {
+    if t.line != *ln {
+        *ln = t.line;
+        print!("{:4}  ", ln);
+    } else {
+        print!("   | ");
+    }
+
+    println!("{:2}  '{}'", t.kind.clone() as u8, t.lexeme(source))
 }

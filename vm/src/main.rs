@@ -1,23 +1,51 @@
-use vm::{
-    chunk::{Chunk, OpCode},
-    exec::VM,
+use std::{
+    env, fs,
+    io::{stdin, stdout, Write},
 };
 
+use vm::exec::VM;
+
 fn main() {
-    let mut c = Chunk::new();
-    let mut temp_pointer;
+    let args: Vec<String> = env::args().collect();
 
-    c.rles.add_rle(); // new line
-    temp_pointer = c.add_const(2.0);
-    c.write(OpCode::Constant);
-    c.write(temp_pointer);
+    if args.len() == 1 {
+        repl();
+    } else if args.len() == 2 {
+        run_file(&args[1]);
+    } else {
+        eprintln!("Usage: rslox <path> ");
+    }
+}
 
-    temp_pointer = c.add_const(4.0);
-    c.write(OpCode::Constant);
-    c.write(temp_pointer);
+fn repl() {
+    let mut line = String::new();
 
-    c.write(OpCode::Sub);
+    loop {
+        print!("> ");
+        if let Err(err) = stdout().flush() {
+            eprint!("I/O error: {err:?}");
+        };
 
-    c.write(OpCode::Return);
-    VM::interpret(c);
+        if let Err(err) = stdin().read_line(&mut line) {
+            eprint!("Readline error: {err:?}");
+        }
+
+        if line.trim().is_empty() {
+            print!("\n");
+            break;
+        }
+
+        VM::interpret(&line);
+
+        line.clear();
+    }
+}
+
+fn run_file(path: &str) {
+    let source = match fs::read_to_string(path) {
+        Err(e) => return eprintln!("File error: {e}"),
+        Ok(s) => s,
+    };
+
+    VM::interpret(&source);
 }
