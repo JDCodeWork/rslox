@@ -5,18 +5,30 @@ pub struct Scanner<'a> {
     pub line: usize,
 }
 
-struct Span {
-    start: usize,
-    end: usize,
+#[derive(Debug, Clone, Copy)]
+pub struct Span {
+    pub start: usize,
+    pub end: usize,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct Token {
     pub kind: TokenKind,
     pub line: usize,
-    span: Span,
+    pub span: Span,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+impl Default for Token {
+    fn default() -> Self {
+        Self {
+            kind: TokenKind::Nil,
+            line: 0,
+            span: Span { start: 0, end: 0 },
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum TokenKind {
     // Single-character tokens.
@@ -211,9 +223,7 @@ impl<'a> Scanner<'a> {
                     }
                 }
             }
-            _ => {
-                // TODO: ERRORS
-            }
+            _ => {}
         }
 
         TokenKind::Identifier
@@ -334,7 +344,7 @@ impl core::fmt::Display for ScannerError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(
             format!(
-                "Scanner error: {} \n--> {}:{} to {}:{}",
+                "Error: {} \n--> {}:{} to {}:{}",
                 self.desc, self.line, self.start, self.line, self.end
             )
             .as_str(),

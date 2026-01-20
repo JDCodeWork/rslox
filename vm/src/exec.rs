@@ -1,7 +1,8 @@
-use crate::compiler::compile;
-
 use super::chunk::{Chunk, OpCode, Value};
 use super::dbg::{dbg_stack, disasm_instr};
+
+use crate::compiler::Compiler;
+
 pub enum InterpretResult {
     Ok,
     CompileErr,
@@ -23,12 +24,23 @@ enum BinaryOp {
 
 impl VM {
     pub fn interpret(source: &str) -> InterpretResult {
-        compile(source);
+        let mut chunk = Chunk::new();
+        let mut c = Compiler::new(source, &mut chunk);
 
-        InterpretResult::Ok
+        if !c.compile() {
+            return InterpretResult::CompileErr;
+        }
+
+        let mut vm = VM {
+            chunk,
+            ip: 0,
+            stack: Vec::new(),
+        };
+
+        vm.run()
     }
 
-    fn _run(&mut self) -> InterpretResult {
+    fn run(&mut self) -> InterpretResult {
         loop {
             // region: Debugging output (--feature dbg)
             dbg_stack(&self.stack);

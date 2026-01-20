@@ -5,10 +5,12 @@ pub type Value = f64;
 #[derive(Debug)]
 pub enum MarshalError {
     InvalidBytecode,
+    InvalidPrecedence,
 }
 
 pub struct RleArr {
     pub base_ln: usize,
+    pub curr_ln: usize,
     pub deltas: Vec<Byte>,
     pub counts: Vec<Byte>,
 }
@@ -42,16 +44,28 @@ impl Chunk {
     }
 
     /// Add a byte to code
-    pub fn write<B: Into<Byte>>(&mut self, byte: B) {
+    pub fn write<B: Into<Byte>>(&mut self, byte: B, ln: usize) {
         self.code.push(byte.into());
-        self.rles.incr_count();
+
+        if self.rles.curr_ln == ln {
+            self.rles.incr_count();
+        } else if self.rles.curr_ln + 1 < ln {
+            self.rles.add_rle();
+
+            let delta_count = ln - self.rles.curr_ln;
+            for _ in 0..delta_count {
+                self.rles.incr_delta();
+            }
+        } else {
+            self.rles.add_rle();
+        }
     }
 
     /// Add a value to constants and returns the position
-    pub fn add_const(&mut self, value: Value) -> Byte {
+    pub fn add_const(&mut self, value: Value) -> usize {
         self.constants.push(value);
 
-        (self.constants.len() - 1) as Byte
+        self.constants.len() - 1
     }
 }
 
@@ -78,6 +92,7 @@ impl RleArr {
     pub fn new() -> Self {
         Self {
             base_ln: 0,
+            curr_ln: 0,
             deltas: Vec::new(),
             counts: Vec::new(),
         }
@@ -95,13 +110,19 @@ impl RleArr {
     pub fn incr_delta(&mut self) {
         if let Some(delta) = self.deltas.last_mut() {
             *delta += 1;
+        } else {
+            self.add_rle();
         }
+
+        self.curr_ln += 1;
     }
 
     /// Add new delta with a vale of 1 and a count with a value of 0. Use when starting a new line.
     pub fn add_rle(&mut self) {
         self.deltas.push(1);
-        self.counts.push(0);
+        self.counts.push(1);
+
+        self.curr_ln += 1;
     }
 
     pub fn get_ln(&self, offset: usize) -> usize {
@@ -125,6 +146,7 @@ impl core::fmt::Display for MarshalError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             MarshalError::InvalidBytecode => f.write_str("Invalid bytecode"),
+            MarshalError::InvalidPrecedence => f.write_str("Invalid precedence"),
         }
     }
 }
