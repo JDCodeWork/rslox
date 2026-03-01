@@ -35,7 +35,9 @@ fn repl() {
             break;
         }
 
-        VM::interpret(&line);
+        if let Err(err) = VM::interpret(&line) {
+            eprintln!("{err:?}");
+        }
 
         line.clear();
     }

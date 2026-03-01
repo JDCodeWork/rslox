@@ -1,4 +1,4 @@
-use crate::{chunk::MarshalError, scanner::Scanner};
+use crate::{chunk::MarshalError, scanner::Scanner, values::Value};
 use std::{collections::HashMap, str::FromStr};
 
 use crate::{
@@ -11,6 +11,7 @@ enum PrefixRule {
     Unary,
     Grouping,
     Number,
+    Literal,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -29,14 +30,14 @@ struct ParseRule {
 enum Precedence {
     None,
     Assign,
-    Or,
-    And,
+    _Or,
+    _And,
     Equality,
     Comparison,
     Term,
     Factor,
     Unary,
-    Call,
+    _Call,
     Primary,
 }
 
@@ -103,9 +104,9 @@ impl<'a> Compiler<'a> {
         let str = self.parser.prev.lexeme(self.source);
         // The scanner has the job of ensuring that the lexeme is a number
         let val = f64::from_str(str).unwrap();
-        let const_ = self.make_constant(val);
+        let const_ = self.make_constant(Value::Number(val));
 
-        self.emit_bytes(OpCode::Constant as u8, const_);
+        self.emit_bytes(OpCode::Cons as u8, const_);
     }
 
     fn unary(&mut self) {
@@ -113,9 +114,19 @@ impl<'a> Compiler<'a> {
         self.parse_precedence(Precedence::Unary);
 
         match op {
-            TokenKind::Minus => self.emit_byte(OpCode::Negate),
+            TokenKind::Minus => self.emit_byte(OpCode::Neg),
+            TokenKind::Bang => self.emit_byte(OpCode::Not),
             _ => {}
         };
+    }
+
+    fn literal(&mut self) {
+        match self.parser.prev.kind {
+            TokenKind::False => self.emit_byte(OpCode::False),
+            TokenKind::True => self.emit_byte(OpCode::True),
+            TokenKind::Nil => self.emit_byte(OpCode::Nil),
+            _ => {} // Unreachable
+        }
     }
 
     fn binary(&mut self) {
@@ -126,6 +137,13 @@ impl<'a> Compiler<'a> {
         );
 
         match op {
+            TokenKind::BangEqual => self.emit_bytes(OpCode::Eq, OpCode::Not),
+            TokenKind::EqualEqual => self.emit_byte(OpCode::Eq),
+            TokenKind::Greater => self.emit_byte(OpCode::Greater),
+            TokenKind::GreaterEqual => self.emit_bytes(OpCode::Less, OpCode::Not),
+            TokenKind::Less => self.emit_byte(OpCode::Less),
+            TokenKind::LessEqual => self.emit_bytes(OpCode::Greater, OpCode::Not),
+
             TokenKind::Plus => self.emit_byte(OpCode::Add),
             TokenKind::Minus => self.emit_byte(OpCode::Sub),
             TokenKind::Star => self.emit_byte(OpCode::Mul),
@@ -156,7 +174,7 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn make_constant(&mut self, val: f64) -> Byte {
+    fn make_constant(&mut self, val: Value) -> Byte {
         let const_idx = self.chunk.add_const(val);
 
         if const_idx > u8::MAX as usize {
@@ -173,6 +191,7 @@ impl<'a> Compiler<'a> {
             PrefixRule::Grouping => self.grouping(),
             PrefixRule::Number => self.number(),
             PrefixRule::Unary => self.unary(),
+            PrefixRule::Literal => self.literal(),
         }
     }
 
@@ -322,6 +341,59 @@ impl Parser {
         self.rules.insert(
             TokenKind::Number,
             ParseRule::default().prefix(PrefixRule::Number),
+        );
+        self.rules.insert(
+            TokenKind::True,
+            ParseRule::default().prefix(PrefixRule::Literal),
+        );
+        self.rules.insert(
+            TokenKind::False,
+            ParseRule::default().prefix(PrefixRule::Literal),
+        );
+        self.rules.insert(
+            TokenKind::Nil,
+            ParseRule::default().prefix(PrefixRule::Literal),
+        );
+        self.rules.insert(
+            TokenKind::Bang,
+            ParseRule::default().prefix(PrefixRule::Unary),
+        );
+
+        self.rules.insert(
+            TokenKind::BangEqual,
+            ParseRule::default()
+                .infix(InfixRule::Binary)
+                .precedence(Precedence::Equality),
+        );
+        self.rules.insert(
+            TokenKind::EqualEqual,
+            ParseRule::default()
+                .infix(InfixRule::Binary)
+                .precedence(Precedence::Equality),
+        );
+        self.rules.insert(
+            TokenKind::Greater,
+            ParseRule::default()
+                .infix(InfixRule::Binary)
+                .precedence(Precedence::Comparison),
+        );
+        self.rules.insert(
+            TokenKind::GreaterEqual,
+            ParseRule::default()
+                .infix(InfixRule::Binary)
+                .precedence(Precedence::Comparison),
+        );
+        self.rules.insert(
+            TokenKind::Less,
+            ParseRule::default()
+                .infix(InfixRule::Binary)
+                .precedence(Precedence::Comparison),
+        );
+        self.rules.insert(
+            TokenKind::LessEqual,
+            ParseRule::default()
+                .infix(InfixRule::Binary)
+                .precedence(Precedence::Comparison),
         );
 
         self.rules.insert(TokenKind::EOF, ParseRule::default());

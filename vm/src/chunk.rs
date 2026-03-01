@@ -1,6 +1,6 @@
-pub type Byte = u8;
+use crate::values::Value;
 
-pub type Value = f64;
+pub type Byte = u8;
 
 #[derive(Debug)]
 pub enum MarshalError {
@@ -18,12 +18,24 @@ pub struct RleArr {
 #[repr(u8)]
 #[derive(Debug)]
 pub enum OpCode {
-    Constant,
-    Negate,
+    Cons,
+    Nil,
+    True,
+    False,
+
+    // Arithmetic Op
+    Neg,
     Add,
     Sub,
     Mul,
     Div,
+
+    // Logic Op
+    Not,
+    Eq,
+    Greater,
+    Less,
+
     Return,
     _COUNT,
 }

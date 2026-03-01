@@ -1,13 +1,7 @@
-#[allow(unused_imports)]
-use crate::chunk::{Chunk, OpCode, Value};
+use crate::chunk::{Chunk, OpCode};
 use crate::scanner::Token;
+use crate::values::Value;
 
-#[cfg(not(feature = "dbg"))]
-#[allow(unused_variables, unused_mut)]
-#[inline]
-pub fn disasm_chunk(chunk: &Chunk, name: &'static str) {}
-
-#[cfg(feature = "dbg")]
 pub fn disasm_chunk(chunk: &Chunk, name: &'static str) {
     println!("== {} ==", name);
 
@@ -17,14 +11,6 @@ pub fn disasm_chunk(chunk: &Chunk, name: &'static str) {
     }
 }
 
-#[cfg(not(feature = "dbg"))]
-#[allow(unused_variables, unused_mut)]
-#[inline]
-pub fn disasm_instr(offset: usize, chunk: &Chunk) -> usize {
-    0
-}
-
-#[cfg(feature = "dbg")]
 pub fn disasm_instr(offset: usize, chunk: &Chunk) -> usize {
     print!("{:04} ", offset);
 
@@ -45,8 +31,17 @@ pub fn disasm_instr(offset: usize, chunk: &Chunk) -> usize {
 
     match opcode {
         OpCode::Return => simple_instr("Return", offset),
-        OpCode::Constant => const_instr("Constant", offset, chunk),
-        OpCode::Negate => simple_instr("Negate", offset),
+        OpCode::Cons => const_instr("Constant", offset, chunk),
+        
+        OpCode::True => simple_instr("True", offset),
+        OpCode::False => simple_instr("False", offset),
+        OpCode::Nil => simple_instr("Nil", offset),
+        OpCode::Eq => simple_instr("Eq", offset),
+        OpCode::Greater => simple_instr("Greater", offset),
+        OpCode::Less => simple_instr("Less", offset),
+
+        OpCode::Neg => simple_instr("Negate", offset),
+        OpCode::Not => simple_instr("Not", offset),
         OpCode::Add => simple_instr("Add", offset),
         OpCode::Sub => simple_instr("Sub", offset),
         OpCode::Mul => simple_instr("Mul", offset),
@@ -56,28 +51,12 @@ pub fn disasm_instr(offset: usize, chunk: &Chunk) -> usize {
     }
 }
 
-#[cfg(not(feature = "dbg"))]
-#[allow(dead_code, unused_variables, unused_mut)]
-#[inline]
-fn simple_instr(name: &'static str, offset: usize) -> usize {
-    0
-}
-
-#[cfg(feature = "dbg")]
 fn simple_instr(name: &'static str, offset: usize) -> usize {
     println!("{name}");
 
     offset + 1
 }
 
-#[cfg(not(feature = "dbg"))]
-#[allow(dead_code, unused_variables, unused_mut)]
-#[inline]
-fn const_instr(name: &'static str, mut offset: usize, chunk: &Chunk) -> usize {
-    0
-}
-
-#[cfg(feature = "dbg")]
 fn const_instr(name: &'static str, mut offset: usize, chunk: &Chunk) -> usize {
     print!("{name} ");
     offset += 1;
@@ -89,12 +68,7 @@ fn const_instr(name: &'static str, mut offset: usize, chunk: &Chunk) -> usize {
 
     offset + 1
 }
-#[cfg(not(feature = "dbg"))]
-#[allow(dead_code, unused_variables, unused_mut)]
-#[inline]
-pub fn dbg_stack(stack: &Vec<Value>) {}
 
-#[cfg(feature = "dbg")]
 pub fn dbg_stack(stack: &Vec<Value>) {
     for slot in stack.iter() {
         print!("[ {slot} ]");
@@ -102,12 +76,6 @@ pub fn dbg_stack(stack: &Vec<Value>) {
     println!();
 }
 
-#[cfg(not(feature = "dbg"))]
-#[allow(dead_code, unused_variables, unused_mut)]
-#[inline]
-pub fn dbg_token(t: &Token, ln: &mut usize, source: &str) {}
-
-#[cfg(feature = "dbg")]
 pub fn dbg_token(t: &Token, ln: &mut usize, source: &str) {
     if t.line != *ln {
         *ln = t.line;
