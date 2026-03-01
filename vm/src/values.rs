@@ -1,10 +1,26 @@
-use std::{
-    cmp::Ordering,
-    fmt,
-    ops::{Add, Div, Mul, Sub},
-};
+use std::fmt;
 
-#[derive(Clone, Copy)]
+pub enum ArithmeticError {
+    DivisionByZero,
+    InvalidOperands,
+}
+
+type ArithResult<T = Value> = Result<T, ArithmeticError>;
+
+pub enum ArithOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+}
+
+pub enum CompareOp {
+    Equal,
+    Greater,
+    Less,
+}
+
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub enum Value {
     Number(f64),
     Boolean(bool),
@@ -16,7 +32,7 @@ impl fmt::Display for Value {
         match self {
             Self::Number(n) => write!(f, "{n}"),
             Self::Boolean(b) => write!(f, "{b}"),
-            Self::Nil => write!(f, "Nil"),
+            Self::Nil => write!(f, "nil"),
         }
     }
 }
@@ -29,97 +45,39 @@ impl Value {
             Value::Number(_) => false,
         }
     }
-}
 
-impl Add for Value {
-    type Output = Value;
+    pub fn arithmetic(self, rhs: Self, op: ArithOp) -> ArithResult {
+        if let (Value::Number(a), Value::Number(b)) = (self, rhs) {
+            match op {
+                ArithOp::Add => Ok(Value::Number(a + b)),
+                ArithOp::Sub => Ok(Value::Number(a - b)),
+                ArithOp::Mul => Ok(Value::Number(a * b)),
+                ArithOp::Div => {
+                    if b == 0.0 {
+                        Err(ArithmeticError::DivisionByZero)
+                    } else {
+                        Ok(Value::Number(a / b))
+                    }
+                }
+            }
+        } else {
+            Err(ArithmeticError::InvalidOperands)
+        }
+    }
 
-    fn add(self, rhs: Self) -> Self::Output {
+    pub fn compare(self, rhs: Self, op: CompareOp) -> bool {
         match (self, rhs) {
-            (Value::Number(a), Value::Number(b)) => Value::Number(a + b),
-            _ => Value::Nil,
-        }
-    }
-}
-
-impl Sub for Value {
-    type Output = Value;
-
-    fn sub(self, rhs: Self) -> Self::Output {
-        match (self, rhs) {
-            (Value::Number(a), Value::Number(b)) => Value::Number(a - b),
-            _ => Value::Nil,
-        }
-    }
-}
-
-impl Div for Value {
-    type Output = Value;
-
-    fn div(self, rhs: Self) -> Self::Output {
-        match (self, rhs) {
-            (Value::Number(a), Value::Number(b)) => Value::Number(a / b),
-            _ => Value::Nil,
-        }
-    }
-}
-
-impl Mul for Value {
-    type Output = Value;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        match (self, rhs) {
-            (Value::Number(a), Value::Number(b)) => Value::Number(a * b),
-            _ => Value::Nil,
-        }
-    }
-}
-
-impl PartialEq for Value {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Value::Number(a), Value::Number(b)) => a == b,
-            (Value::Boolean(a), Value::Boolean(b)) => a == b,
-            (Value::Nil, Value::Nil) => true,
-            (_, _) => false,
-        }
-    }
-}
-
-impl PartialOrd for Value {
-    fn ge(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Value::Number(a), Value::Number(b)) => a >= b,
-            (_, _) => false,
-        }
-    }
-
-    fn le(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Value::Number(a), Value::Number(b)) => a <= b,
-            (_, _) => false,
-        }
-    }
-
-    fn gt(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Value::Number(a), Value::Number(b)) => a > b,
-            (_, _) => false,
-        }
-    }
-
-    fn lt(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Value::Number(a), Value::Number(b)) => a < b,
-            (_, _) => false,
-        }
-    }
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        match (self, other) {
-            (Value::Number(a), Value::Number(b)) => a.partial_cmp(b),
-            (Value::Boolean(a), Value::Boolean(b)) => Some(a.cmp(b)),
-            (Value::Nil, Value::Nil) => Some(Ordering::Equal),
-            _ => None,
+            (Value::Number(a), Value::Number(b)) => match op {
+                CompareOp::Equal => a == b,
+                CompareOp::Greater => a > b,
+                CompareOp::Less => a < b,
+            },
+            (Value::Boolean(a), Value::Boolean(b)) => match op {
+                CompareOp::Equal => a == b,
+                _ => false,
+            },
+            (Value::Nil, Value::Nil) => matches!(op, CompareOp::Equal),
+            _ => false,
         }
     }
 }

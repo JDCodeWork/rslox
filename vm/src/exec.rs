@@ -3,7 +3,10 @@ use super::chunk::{Chunk, OpCode};
 #[cfg(feature = "dbg")]
 use super::dbg::{dbg_stack, disasm_instr};
 
-use crate::{compiler::Compiler, values::Value};
+use crate::{
+    compiler::Compiler,
+    values::{ArithOp, CompareOp, Value},
+};
 
 #[derive(Debug)]
 pub enum ExecErr {
@@ -17,19 +20,6 @@ pub struct VM {
     pub chunk: Chunk,
     pub stack: Vec<Value>,
     pub ip: usize,
-}
-
-enum BinaryOp {
-    Add,
-    Sub,
-    Mul,
-    Div,
-}
-
-enum CompareOp {
-    Equal,
-    Greater,
-    Less,
 }
 
 impl VM {
@@ -79,10 +69,10 @@ impl VM {
                 OpCode::Less => self.compare(CompareOp::Less),
 
                 OpCode::Neg => self.negate(),
-                OpCode::Add => self.binary_op(BinaryOp::Add),
-                OpCode::Sub => self.binary_op(BinaryOp::Sub),
-                OpCode::Mul => self.binary_op(BinaryOp::Mul),
-                OpCode::Div => self.binary_op(BinaryOp::Div),
+                OpCode::Add => self.binary_op(ArithOp::Add),
+                OpCode::Sub => self.binary_op(ArithOp::Sub),
+                OpCode::Mul => self.binary_op(ArithOp::Mul),
+                OpCode::Div => self.binary_op(ArithOp::Div),
                 OpCode::Return => return Ok(()),
                 // Should never happen
                 OpCode::_COUNT => return Err(ExecErr::CompileErr),
@@ -106,56 +96,59 @@ impl VM {
     }
 
     fn compare(&mut self, op: CompareOp) -> ExecResult {
-        // Stack underflow
-        let b = self.stack.pop().unwrap();
-        let a = self.stack.pop().unwrap();
+        let (a, b) = self.operands()?;
 
-        let res = match op {
-            CompareOp::Equal => a == b,
-            CompareOp::Greater => a > b,
-            CompareOp::Less => a < b,
-        };
-
+        let res = a.compare(b, op);
         self.stack.push(Value::Boolean(res));
 
         Ok(())
     }
 
     fn not(&mut self) -> ExecResult {
-        // Stack underflow
-
-        if let Some(value) = self.stack.last_mut() {
-            *value = Value::Boolean(value.is_falsey());
-        }
+        let value = self.operand()?;
+        *value = Value::Boolean(value.is_falsey());
 
         Ok(())
     }
 
     fn negate(&mut self) -> ExecResult {
-        // Stack underflow
-
-        if let Some(Value::Number(value)) = self.stack.last_mut() {
+        if let Value::Number(value) = self.operand()? {
             *value = -(*value);
         }
+
+        // TODO: Type error
 
         Ok(())
     }
 
-    fn binary_op(&mut self, op: BinaryOp) -> ExecResult {
-        // Stack underflow
+    fn binary_op(&mut self, op: ArithOp) -> ExecResult {
+        let (a, b) = self.operands()?;
+
+        let Ok(res) = a.arithmetic(b, op) else {
+            return Err(ExecErr::RuntimeErr);
+        };
+
+        self.stack.push(res);
+
+        Ok(())
+    }
+
+    fn operands(&mut self) -> Result<(Value, Value), ExecErr> {
+        // TODO: Stack underflow
 
         let b = self.stack.pop().unwrap();
         let a = self.stack.pop().unwrap();
 
-        // TODO: Ensure that both values are the same type
-        match op {
-            BinaryOp::Add => self.stack.push(a + b),
-            BinaryOp::Sub => self.stack.push(a - b),
-            BinaryOp::Div => self.stack.push(a / b),
-            BinaryOp::Mul => self.stack.push(a * b),
-        };
+        Ok((a, b))
+    }
 
-        Ok(())
+    fn operand(&mut self) -> Result<&mut Value, ExecErr> {
+        if let Some(value) = self.stack.last_mut() {
+            Ok(value)
+        } else {
+            // Stack underflow
+            Err(ExecErr::RuntimeErr)
+        }
     }
 
     #[inline]
