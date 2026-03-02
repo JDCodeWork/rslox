@@ -128,7 +128,7 @@ impl<'a> Scanner<'a> {
             }
             '=' => {
                 if self.match_('=') {
-                    self.make_token(TokenKind::EqualEqual)
+                    dbg!(self.make_token(TokenKind::EqualEqual))
                 } else {
                     self.make_token(TokenKind::Equal)
                 }
@@ -278,7 +278,12 @@ impl<'a> Scanner<'a> {
             return false;
         };
 
-        *c as char == expect
+        if *c as char == expect {
+            self.advance();
+            return true;
+        }
+
+        false
     }
 
     fn skip_whitespace(&mut self) {

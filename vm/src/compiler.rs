@@ -1,4 +1,4 @@
-use crate::{chunk::MarshalError, scanner::Scanner, values::Constant};
+use crate::{scanner::Scanner, values::Constant};
 use std::{collections::HashMap, str::FromStr};
 
 use crate::{
@@ -142,9 +142,7 @@ impl<'a> Compiler<'a> {
     fn binary(&mut self) {
         let op = self.parser.prev.kind;
         let precedence = self.parser_rule_from(&op).precedence;
-        self.parse_precedence(
-            Precedence::try_from(precedence as u8 + 1).unwrap_or(Precedence::None),
-        );
+        self.parse_precedence(precedence.next());
 
         match op {
             TokenKind::BangEqual => self.emit_bytes(OpCode::Eq, OpCode::Not),
@@ -170,7 +168,7 @@ impl<'a> Compiler<'a> {
     fn parse_precedence(&mut self, prec: Precedence) {
         self.advance();
         let prefix_option = self.parser_rule_from(&self.parser.prev.kind).prefix;
-        let Some(prefix) = prefix_option else {
+        let Some(prefix) = dbg!(prefix_option) else {
             self.error_at(self.parser.curr, "Expect expression.");
             return;
         };
@@ -187,7 +185,7 @@ impl<'a> Compiler<'a> {
     fn make_constant(&mut self, constant: Constant) -> Byte {
         let const_idx = self.chunk.add_const(constant);
 
-        if const_idx > u8::MAX as usize {
+        if dbg!(const_idx) > u8::MAX as usize {
             self.error_at(self.parser.curr, "Too many constants in a chunk");
 
             0
@@ -302,18 +300,6 @@ impl ParseRule {
     }
 }
 
-impl TryFrom<u8> for Precedence {
-    type Error = MarshalError;
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        if value > (Precedence::Primary as u8) - 1 {
-            return Err(MarshalError::InvalidPrecedence);
-        }
-
-        let opcode = unsafe { core::mem::transmute::<Byte, Self>(value) };
-        Ok(opcode)
-    }
-}
-
 impl Parser {
     fn define_rules(&mut self) {
         self.rules.insert(
@@ -413,5 +399,23 @@ impl Parser {
         );
 
         self.rules.insert(TokenKind::EOF, ParseRule::default());
+    }
+}
+
+impl Precedence {
+    fn next(self) -> Self {
+        match self {
+            Precedence::None => Precedence::Assign,
+            Precedence::Assign => Precedence::_Or,
+            Precedence::_Or => Precedence::_And,
+            Precedence::_And => Precedence::Equality,
+            Precedence::Equality => Precedence::Comparison,
+            Precedence::Comparison => Precedence::Term,
+            Precedence::Term => Precedence::Factor,
+            Precedence::Factor => Precedence::Unary,
+            Precedence::Unary => Precedence::_Call,
+            Precedence::_Call => Precedence::Primary,
+            Precedence::Primary => Precedence::Primary,
+        }
     }
 }

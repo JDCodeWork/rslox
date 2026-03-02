@@ -5,7 +5,7 @@ use super::dbg::{dbg_mem, disasm_instr};
 
 use crate::{
     compiler::Compiler,
-    values::{ArithOp, CompareOp, Constant, ObjRef, Object, StrObj, Value},
+    values::{ArithOp, ArithmeticError, CompareOp, Constant, ObjRef, Object, StrObj, Value},
 };
 
 #[derive(Debug)]
@@ -99,10 +99,50 @@ impl<'a> VM<'a> {
         Ok(())
     }
 
+    fn arith_objs(
+        &mut self,
+        a_ref: ObjRef,
+        b_ref: ObjRef,
+        op: ArithOp,
+    ) -> Result<Value, ArithmeticError> {
+        let ArithOp::Add = op else {
+            // Invalid object operation
+            return Err(ArithmeticError::InvalidOperands);
+        };
+
+        let a = &self.heap[a_ref.0];
+        let b = &self.heap[b_ref.0];
+
+        let chars = match (a, b) {
+            (Object::String(a_str), Object::String(b_str)) => {
+                format!("{}{}", a_str.chars, b_str.chars)
+            }
+        };
+
+        let value = self.allocate_string(chars);
+
+        Ok(value)
+    }
+
+    fn compare_objs(&mut self, a_ref: ObjRef, b_ref: ObjRef, op: CompareOp) -> bool {
+        let a = &self.heap[a_ref.0];
+        let b = &self.heap[b_ref.0];
+
+        match (a, b, op) {
+            (Object::String(a_str), Object::String(b_str), CompareOp::Equal) => a_str.chars == b_str.chars,
+            (Object::String(a_str), Object::String(b_str), CompareOp::Greater) => a_str.chars > b_str.chars,
+            (Object::String(a_str), Object::String(b_str), CompareOp::Less) => a_str.chars < b_str.chars,
+        }
+    }
+
     fn compare(&mut self, op: CompareOp) -> ExecResult {
         let (a, b) = self.operands()?;
 
-        let res = a.compare(b, op);
+        let res = match (a, b) {
+            (Value::Object(a_id), Value::Object(b_id)) => self.compare_objs(a_id, b_id, op),
+            _ => a.compare(b, op),
+        };
+
         self.stack.push(Value::Boolean(res));
 
         Ok(())
@@ -128,11 +168,16 @@ impl<'a> VM<'a> {
     fn binary_op(&mut self, op: ArithOp) -> ExecResult {
         let (a, b) = self.operands()?;
 
-        let Ok(res) = a.arithmetic(b, op) else {
+        let res = match (a, b) {
+            (Value::Object(a_ref), Value::Object(b_ref)) => self.arith_objs(a_ref, b_ref, op),
+            _ => a.arithmetic(b, op),
+        };
+
+        let Ok(value) = res else {
             return Err(ExecErr::RuntimeErr);
         };
 
-        self.stack.push(res);
+        self.stack.push(value);
 
         Ok(())
     }
@@ -180,6 +225,15 @@ impl<'a> VM<'a> {
         self.heap.push(obj);
 
         Ok(obj_ref)
+    }
+
+    fn allocate_string(&mut self, chars: String) -> Value {
+        let str_obj = Object::String(StrObj { chars });
+
+        let obj_ref = ObjRef(self.heap.len());
+        self.heap.push(str_obj);
+
+        Value::Object(obj_ref)
     }
 
     #[inline]
