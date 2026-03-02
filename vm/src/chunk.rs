@@ -1,4 +1,4 @@
-use crate::values::Value;
+use crate::values::Constant;
 
 pub type Byte = u8;
 
@@ -43,7 +43,7 @@ pub enum OpCode {
 pub struct Chunk {
     pub rles: RleArr,
     pub code: Vec<Byte>,
-    pub constants: Vec<Value>,
+    pub constants: Vec<Constant>,
 }
 
 impl Chunk {
@@ -74,7 +74,7 @@ impl Chunk {
     }
 
     /// Add a value to constants and returns the position
-    pub fn add_const(&mut self, value: Value) -> usize {
+    pub fn add_const(&mut self, value: Constant) -> usize {
         self.constants.push(value);
 
         self.constants.len() - 1

@@ -1,4 +1,4 @@
-use crate::{chunk::MarshalError, scanner::Scanner, values::Value};
+use crate::{chunk::MarshalError, scanner::Scanner, values::Constant};
 use std::{collections::HashMap, str::FromStr};
 
 use crate::{
@@ -12,6 +12,7 @@ enum PrefixRule {
     Grouping,
     Number,
     Literal,
+    String,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -104,7 +105,7 @@ impl<'a> Compiler<'a> {
         let str = self.parser.prev.lexeme(self.source);
         // The scanner has the job of ensuring that the lexeme is a number
         let val = f64::from_str(str).unwrap();
-        let const_ = self.make_constant(Value::Number(val));
+        let const_ = self.make_constant(Constant::Number(val));
 
         self.emit_bytes(OpCode::Cons as u8, const_);
     }
@@ -118,6 +119,15 @@ impl<'a> Compiler<'a> {
             TokenKind::Bang => self.emit_byte(OpCode::Not),
             _ => {}
         };
+    }
+
+    fn string(&mut self) {
+        let const_ = self.make_constant(Constant::String {
+            start: self.parser.prev.span.start + 1,
+            end: self.parser.prev.span.end - 1,
+        });
+
+        self.emit_bytes(OpCode::Cons as u8, const_);
     }
 
     fn literal(&mut self) {
@@ -174,8 +184,8 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    fn make_constant(&mut self, val: Value) -> Byte {
-        let const_idx = self.chunk.add_const(val);
+    fn make_constant(&mut self, constant: Constant) -> Byte {
+        let const_idx = self.chunk.add_const(constant);
 
         if const_idx > u8::MAX as usize {
             self.error_at(self.parser.curr, "Too many constants in a chunk");
@@ -192,6 +202,7 @@ impl<'a> Compiler<'a> {
             PrefixRule::Number => self.number(),
             PrefixRule::Unary => self.unary(),
             PrefixRule::Literal => self.literal(),
+            PrefixRule::String => self.string(),
         }
     }
 
@@ -394,6 +405,11 @@ impl Parser {
             ParseRule::default()
                 .infix(InfixRule::Binary)
                 .precedence(Precedence::Comparison),
+        );
+
+        self.rules.insert(
+            TokenKind::String,
+            ParseRule::default().prefix(PrefixRule::String),
         );
 
         self.rules.insert(TokenKind::EOF, ParseRule::default());

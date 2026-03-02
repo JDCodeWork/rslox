@@ -1,11 +1,11 @@
 use super::chunk::{Chunk, OpCode};
 
 #[cfg(feature = "dbg")]
-use super::dbg::{dbg_stack, disasm_instr};
+use super::dbg::{dbg_mem, disasm_instr};
 
 use crate::{
     compiler::Compiler,
-    values::{ArithOp, CompareOp, Value},
+    values::{ArithOp, CompareOp, Constant, ObjRef, Object, StrObj, Value},
 };
 
 #[derive(Debug)]
@@ -16,13 +16,15 @@ pub enum ExecErr {
 
 type ExecResult = Result<(), ExecErr>;
 
-pub struct VM {
+pub struct VM<'a> {
     pub chunk: Chunk,
     pub stack: Vec<Value>,
+    pub heap: Vec<Object>,
+    pub src: &'a str,
     pub ip: usize,
 }
 
-impl VM {
+impl<'a> VM<'a> {
     pub fn interpret(source: &str) -> ExecResult {
         let mut chunk = Chunk::new();
         let mut c = Compiler::new(source, &mut chunk);
@@ -35,6 +37,8 @@ impl VM {
             chunk,
             ip: 0,
             stack: Vec::new(),
+            heap: Vec::new(),
+            src: source,
         };
 
         vm.run()
@@ -45,7 +49,7 @@ impl VM {
             // region: Debugging output (--features dbg)
             #[cfg(feature = "dbg")]
             {
-                dbg_stack(&self.stack);
+                dbg_mem(&self.stack, &self.heap);
                 disasm_instr(self.ip, &self.chunk);
             }
             // endregion: Debugging output (--features dbg)
@@ -82,7 +86,7 @@ impl VM {
 
     fn constant(&mut self) -> ExecResult {
         let const_ = self.read_byte();
-        let value = self.chunk.constants[const_ as usize];
+        let value = self.make_value(const_)?;
 
         self.stack.push(value);
 
@@ -149,6 +153,33 @@ impl VM {
             // Stack underflow
             Err(ExecErr::RuntimeErr)
         }
+    }
+
+    fn make_value(&mut self, const_: u8) -> Result<Value, ExecErr> {
+        let constant = self.chunk.constants[const_ as usize].clone();
+
+        let value = match constant {
+            Constant::Number(num) => Value::Number(num),
+            Constant::Boolean(b) => Value::Boolean(b),
+            Constant::Nil => Value::Nil,
+            c => Value::Object(self.make_object_ref(c)?),
+        };
+
+        Ok(value)
+    }
+
+    fn make_object_ref(&mut self, constant: Constant) -> Result<ObjRef, ExecErr> {
+        let obj = match constant {
+            Constant::String { start, end } => Object::String(StrObj {
+                chars: self.src[start..end].to_string(),
+            }),
+            _ => return Err(ExecErr::RuntimeErr), // Unreachable
+        };
+
+        let obj_ref = ObjRef(self.heap.len());
+        self.heap.push(obj);
+
+        Ok(obj_ref)
     }
 
     #[inline]

@@ -49,5 +49,7 @@ fn run_file(path: &str) {
         Ok(s) => s,
     };
 
-    VM::interpret(&source);
+    if let Err(err) = VM::interpret(&source) {
+        eprintln!("{err:?}");
+    }
 }

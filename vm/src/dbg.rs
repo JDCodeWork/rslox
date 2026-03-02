@@ -1,6 +1,6 @@
 use crate::chunk::{Chunk, OpCode};
 use crate::scanner::Token;
-use crate::values::Value;
+use crate::values::{Object, Value};
 
 pub fn disasm_chunk(chunk: &Chunk, name: &'static str) {
     println!("== {} ==", name);
@@ -32,7 +32,7 @@ pub fn disasm_instr(offset: usize, chunk: &Chunk) -> usize {
     match opcode {
         OpCode::Return => simple_instr("Return", offset),
         OpCode::Cons => const_instr("Constant", offset, chunk),
-        
+
         OpCode::True => simple_instr("True", offset),
         OpCode::False => simple_instr("False", offset),
         OpCode::Nil => simple_instr("Nil", offset),
@@ -63,15 +63,19 @@ fn const_instr(name: &'static str, mut offset: usize, chunk: &Chunk) -> usize {
 
     let constant = chunk.code[offset];
     print!("({constant}) -> '");
-    let value = chunk.constants[constant as usize];
+    let value = chunk.constants[constant as usize].clone();
     println!("{value}'");
 
     offset + 1
 }
 
-pub fn dbg_stack(stack: &Vec<Value>) {
+pub fn dbg_mem(stack: &Vec<Value>, heap: &Vec<Object>) {
     for slot in stack.iter() {
-        print!("[ {slot} ]");
+        if let Value::Object(id) = slot {
+            print!("[ {} ]", heap[id.0])
+        } else {
+            print!("[ {slot} ]");
+        }
     }
     println!();
 }

@@ -20,11 +20,31 @@ pub enum CompareOp {
     Less,
 }
 
+#[derive(Clone, PartialEq, PartialOrd)]
+pub enum Constant {
+    Number(f64),
+    Boolean(bool),
+    String { start: usize, end: usize },
+    Nil,
+}
+
 #[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub enum Value {
     Number(f64),
     Boolean(bool),
+    Object(ObjRef),
     Nil,
+}
+
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
+pub struct ObjRef(pub usize);
+
+pub enum Object {
+    String(StrObj),
+}
+
+pub struct StrObj {
+    pub chars: String,
 }
 
 impl fmt::Display for Value {
@@ -32,6 +52,7 @@ impl fmt::Display for Value {
         match self {
             Self::Number(n) => write!(f, "{n}"),
             Self::Boolean(b) => write!(f, "{b}"),
+            Self::Object(_) => write!(f, "obj"),
             Self::Nil => write!(f, "nil"),
         }
     }
@@ -42,6 +63,7 @@ impl Value {
         match self {
             Value::Boolean(b) => !b,
             Value::Nil => true,
+            Self::Object(_) => false,
             Value::Number(_) => false,
         }
     }
@@ -77,7 +99,27 @@ impl Value {
                 _ => false,
             },
             (Value::Nil, Value::Nil) => matches!(op, CompareOp::Equal),
+            (Value::Object(id_a), Value::Object(id_b)) => id_a == id_b,
             _ => false,
+        }
+    }
+}
+
+impl fmt::Display for Constant {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Number(n) => write!(f, "{n}"),
+            Self::Boolean(b) => write!(f, "{b}"),
+            Self::String { start: _s, end: _e } => write!(f, "str"),
+            Self::Nil => write!(f, "nil"),
+        }
+    }
+}
+
+impl fmt::Display for Object {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Object::String(str) => write!(f, "{}", str.chars),
         }
     }
 }
