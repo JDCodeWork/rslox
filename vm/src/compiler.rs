@@ -168,7 +168,7 @@ impl<'a> Compiler<'a> {
     fn parse_precedence(&mut self, prec: Precedence) {
         self.advance();
         let prefix_option = self.parser_rule_from(&self.parser.prev.kind).prefix;
-        let Some(prefix) = dbg!(prefix_option) else {
+        let Some(prefix) = prefix_option else {
             self.error_at(self.parser.curr, "Expect expression.");
             return;
         };
@@ -185,7 +185,7 @@ impl<'a> Compiler<'a> {
     fn make_constant(&mut self, constant: Constant) -> Byte {
         let const_idx = self.chunk.add_const(constant);
 
-        if dbg!(const_idx) > u8::MAX as usize {
+        if const_idx > u8::MAX as usize {
             self.error_at(self.parser.curr, "Too many constants in a chunk");
 
             0

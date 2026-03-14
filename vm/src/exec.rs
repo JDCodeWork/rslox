@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::chunk::{Chunk, OpCode};
 
 #[cfg(feature = "dbg")]
@@ -16,12 +18,34 @@ pub enum ExecErr {
 
 type ExecResult = Result<(), ExecErr>;
 
+pub struct Interner<T> {
+    table: HashMap<Box<str>, T>,
+}
+
+impl<T> Interner<T> {
+    fn new() -> Self {
+        Self {
+            table: HashMap::new(),
+        }
+    }
+
+    pub fn get(&self, k: &str) -> Option<&T> {
+        self.table.get(k)
+    }
+
+    fn insert(&mut self, k: &str, v: T) {
+        self.table.insert(k.into(), v);
+    }
+}
+
 pub struct VM<'a> {
     pub chunk: Chunk,
     pub stack: Vec<Value>,
     pub heap: Vec<Object>,
     pub src: &'a str,
     pub ip: usize,
+
+    pub strings: Interner<ObjRef>,
 }
 
 impl<'a> VM<'a> {
@@ -38,6 +62,7 @@ impl<'a> VM<'a> {
             ip: 0,
             stack: Vec::new(),
             heap: Vec::new(),
+            strings: Interner::new(),
             src: source,
         };
 
@@ -105,23 +130,17 @@ impl<'a> VM<'a> {
         b_ref: ObjRef,
         op: ArithOp,
     ) -> Result<Value, ArithmeticError> {
-        let ArithOp::Add = op else {
-            // Invalid object operation
-            return Err(ArithmeticError::InvalidOperands);
-        };
-
         let a = &self.heap[a_ref.0];
         let b = &self.heap[b_ref.0];
 
-        let chars = match (a, b) {
-            (Object::String(a_str), Object::String(b_str)) => {
-                format!("{}{}", a_str.chars, b_str.chars)
+        match (a, b, op) {
+            (Object::String(a_str), Object::String(b_str), ArithOp::Add) => {
+                let chars = format!("{}{}", a_str.chars, b_str.chars);
+
+                Ok(Value::Object(self.intern_string(&chars)))
             }
-        };
-
-        let value = self.allocate_string(chars);
-
-        Ok(value)
+            _ => Err(ArithmeticError::InvalidOperands),
+        }
     }
 
     fn compare_objs(&mut self, a_ref: ObjRef, b_ref: ObjRef, op: CompareOp) -> bool {
@@ -129,9 +148,13 @@ impl<'a> VM<'a> {
         let b = &self.heap[b_ref.0];
 
         match (a, b, op) {
-            (Object::String(a_str), Object::String(b_str), CompareOp::Equal) => a_str.chars == b_str.chars,
-            (Object::String(a_str), Object::String(b_str), CompareOp::Greater) => a_str.chars > b_str.chars,
-            (Object::String(a_str), Object::String(b_str), CompareOp::Less) => a_str.chars < b_str.chars,
+            (Object::String(_), Object::String(_), CompareOp::Equal) => a_ref == b_ref,
+            (Object::String(a_str), Object::String(b_str), CompareOp::Less) => {
+                a_str.lenght < b_str.lenght
+            }
+            (Object::String(a_str), Object::String(b_str), CompareOp::Greater) => {
+                a_str.lenght > b_str.lenght
+            }
         }
     }
 
@@ -207,33 +230,32 @@ impl<'a> VM<'a> {
             Constant::Number(num) => Value::Number(num),
             Constant::Boolean(b) => Value::Boolean(b),
             Constant::Nil => Value::Nil,
-            c => Value::Object(self.make_object_ref(c)?),
+            Constant::String { start, end } => {
+                let str_ref = self.intern_string(&self.src[start..end]);
+                Value::Object(str_ref)
+            }
         };
 
         Ok(value)
     }
 
-    fn make_object_ref(&mut self, constant: Constant) -> Result<ObjRef, ExecErr> {
-        let obj = match constant {
-            Constant::String { start, end } => Object::String(StrObj {
-                chars: self.src[start..end].to_string(),
-            }),
-            _ => return Err(ExecErr::RuntimeErr), // Unreachable
-        };
-
-        let obj_ref = ObjRef(self.heap.len());
-        self.heap.push(obj);
-
-        Ok(obj_ref)
+    /// Allocates an object in the heap and returns `ObjRef` pointing to it
+    fn allocate_obj(&mut self, object: Object) -> ObjRef {
+        self.heap.push(object);
+        ObjRef(self.heap.len() - 1)
     }
 
-    fn allocate_string(&mut self, chars: String) -> Value {
-        let str_obj = Object::String(StrObj { chars });
+    fn intern_string(&mut self, s: &str) -> ObjRef {
+        if let Some(str_ref) = self.strings.get(s) {
+            return *str_ref;
+        }
 
-        let obj_ref = ObjRef(self.heap.len());
-        self.heap.push(str_obj);
+        let str_obj = Object::String(StrObj::new(s));
+        let str_ref = self.allocate_obj(str_obj);
 
-        Value::Object(obj_ref)
+        self.strings.insert(s, str_ref);
+
+        str_ref
     }
 
     #[inline]

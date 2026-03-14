@@ -36,15 +36,33 @@ pub enum Value {
     Nil,
 }
 
-#[derive(Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct ObjRef(pub usize);
 
 pub enum Object {
     String(StrObj),
 }
 
+impl fmt::Display for Object {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Object::String(str) => write!(f, "{}", str.chars),
+        }
+    }
+}
+
 pub struct StrObj {
-    pub chars: String,
+    pub lenght: usize,
+    pub chars: Box<str>,
+}
+
+impl StrObj {
+    pub fn new(s: &str) -> Self {
+        Self {
+            lenght: s.len(),
+            chars: s.into(),
+        }
+    }
 }
 
 impl fmt::Display for Value {
@@ -112,14 +130,6 @@ impl fmt::Display for Constant {
             Self::Boolean(b) => write!(f, "{b}"),
             Self::String { start: _s, end: _e } => write!(f, "str"),
             Self::Nil => write!(f, "nil"),
-        }
-    }
-}
-
-impl fmt::Display for Object {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Object::String(str) => write!(f, "{}", str.chars),
         }
     }
 }

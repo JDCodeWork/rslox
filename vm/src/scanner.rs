@@ -128,7 +128,7 @@ impl<'a> Scanner<'a> {
             }
             '=' => {
                 if self.match_('=') {
-                    dbg!(self.make_token(TokenKind::EqualEqual))
+                    self.make_token(TokenKind::EqualEqual)
                 } else {
                     self.make_token(TokenKind::Equal)
                 }
