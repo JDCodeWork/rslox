@@ -36,6 +36,14 @@ impl<T> Interner<T> {
     fn insert(&mut self, k: &str, v: T) {
         self.table.insert(k.into(), v);
     }
+
+    fn set(&mut self, k: &str, v: T) -> bool {
+        if let None = self.table.insert(k.into(), v) {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 pub struct VM<'a> {
@@ -46,6 +54,7 @@ pub struct VM<'a> {
     pub ip: usize,
 
     pub strings: Interner<ObjRef>,
+    pub globals: Interner<Value>,
 }
 
 impl<'a> VM<'a> {
@@ -63,6 +72,7 @@ impl<'a> VM<'a> {
             stack: Vec::new(),
             heap: Vec::new(),
             strings: Interner::new(),
+            globals: Interner::new(),
             src: source,
         };
 
@@ -91,6 +101,7 @@ impl<'a> VM<'a> {
                 OpCode::Pop => self.pop(),
 
                 OpCode::Print => self.print(),
+                OpCode::DefGlob => self.def_global(),
 
                 OpCode::True => self.literal(Value::Boolean(true)),
                 OpCode::False => self.literal(Value::Boolean(false)),
@@ -111,6 +122,18 @@ impl<'a> VM<'a> {
                 OpCode::_COUNT => return Err(ExecErr::CompileErr),
             }?
         }
+    }
+
+    fn def_global(&mut self) -> ExecResult {
+        let const_ = self.read_byte();
+        // Read constant and interprect as a string
+        if let Constant::String { start, end } = self.chunk.constants[const_ as usize] {
+            // TODO: Report underflow stack
+            self.globals
+                .set(&self.src[start..end], self.stack.pop().unwrap());
+        }
+
+        Ok(())
     }
 
     fn print(&mut self) -> ExecResult {

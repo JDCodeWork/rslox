@@ -23,6 +23,7 @@ pub enum OpCode {
     Pop,
 
     Print,
+    DefGlob,
 
     Nil,
     True,

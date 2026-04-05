@@ -99,11 +99,49 @@ impl<'a> Compiler<'a> {
     }
 
     fn declaration(&mut self) {
-        self.statement();
+        if self._match(TokenKind::Var) {
+            self.var_decl();
+        } else {
+            self.statement();
+        }
 
         if self.parser.panic_mode {
             self.syncronize();
         }
+    }
+
+    fn var_decl(&mut self) {
+        let var = self.parse_var();
+
+        if self._match(TokenKind::Equal) {
+            self.expression();
+        } else {
+            self.emit_byte(OpCode::Nil);
+        }
+
+        self.consume(
+            TokenKind::Semicolon,
+            "Expect ';' after variable declaratiion.",
+        );
+        self.def_global(var);
+    }
+
+    fn def_global(&mut self, var: Byte) {
+        self.emit_bytes(OpCode::DefGlob as u8, var);
+    }
+
+    fn parse_var(&mut self) -> Byte {
+        self.consume(
+            TokenKind::Identifier,
+            "Expect variable name after 'var' keyword.",
+        );
+
+        let name = self.parser.prev.span;
+
+        self.make_constant(Constant::String {
+            start: name.start,
+            end: name.end,
+        })
     }
 
     fn statement(&mut self) {
