@@ -18,7 +18,12 @@ pub struct RleArr {
 #[repr(u8)]
 #[derive(Debug)]
 pub enum OpCode {
+    // Data Op
     Cons,
+    Pop,
+
+    Print,
+
     Nil,
     True,
     False,

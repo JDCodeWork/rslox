@@ -89,12 +89,37 @@ impl<'a> Compiler<'a> {
 
     pub fn compile(&mut self) -> bool {
         self.advance();
-        self.expression();
 
-        self.consume(TokenKind::EOF, "Expect end of expression");
+        while !self._match(TokenKind::EOF) {
+            self.declaration();
+        }
         self.emit_byte(OpCode::Return);
 
         !self.parser.had_err
+    }
+
+    fn declaration(&mut self) {
+        self.statement();
+
+        if self.parser.panic_mode {
+            self.syncronize();
+        }
+    }
+
+    fn statement(&mut self) {
+        if self._match(TokenKind::Print) {
+            self.print_stmt();
+        } else {
+            self.expression();
+            self.consume(TokenKind::Semicolon, "Expect ';' after expression.");
+            self.emit_byte(OpCode::Pop);
+        }
+    }
+
+    fn print_stmt(&mut self) {
+        self.expression();
+        self.consume(TokenKind::Semicolon, "Expect ';' after expression.");
+        self.emit_byte(OpCode::Print);
     }
 
     fn expression(&mut self) {
@@ -219,6 +244,24 @@ impl<'a> Compiler<'a> {
         }
     }
 
+    fn syncronize(&mut self) {
+        self.parser.panic_mode = false;
+        while !self._match(TokenKind::EOF) {
+            match self.parser.prev.kind {
+                TokenKind::Semicolon
+                | TokenKind::Class
+                | TokenKind::Fun
+                | TokenKind::Var
+                | TokenKind::For
+                | TokenKind::If
+                | TokenKind::While
+                | TokenKind::Print
+                | TokenKind::Return => return,
+                _ => self.advance(),
+            }
+        }
+    }
+
     fn advance(&mut self) {
         self.parser.prev = self.parser.curr;
 
@@ -240,6 +283,18 @@ impl<'a> Compiler<'a> {
             return;
         }
         self.error_at(self.parser.curr, error);
+    }
+
+    fn check(&self, expected: TokenKind) -> bool {
+        self.parser.curr.kind == expected
+    }
+
+    fn _match(&mut self, expected: TokenKind) -> bool {
+        if self.check(expected) {
+            self.advance();
+            return true;
+        }
+        false
     }
 
     fn emit_byte<B: Into<u8>>(&mut self, b: B) {

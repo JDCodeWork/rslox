@@ -88,6 +88,10 @@ impl<'a> VM<'a> {
 
             match opcode {
                 OpCode::Cons => self.constant(),
+                OpCode::Pop => self.pop(),
+
+                OpCode::Print => self.print(),
+
                 OpCode::True => self.literal(Value::Boolean(true)),
                 OpCode::False => self.literal(Value::Boolean(false)),
                 OpCode::Nil => self.literal(Value::Nil),
@@ -107,6 +111,23 @@ impl<'a> VM<'a> {
                 OpCode::_COUNT => return Err(ExecErr::CompileErr),
             }?
         }
+    }
+
+    fn print(&mut self) -> ExecResult {
+        // TODO: Report underflow stack
+        let value = self.stack.pop().unwrap();
+        if let Value::Object(id) = value {
+            println!("{}", self.heap[id.0]);
+        } else {
+            println!("{}", value);
+        }
+
+        Ok(())
+    }
+
+    fn pop(&mut self) -> ExecResult {
+        self.stack.pop();
+        Ok(())
     }
 
     fn constant(&mut self) -> ExecResult {
