@@ -7,6 +7,7 @@ use super::dbg::{dbg_mem, disasm_instr};
 
 use crate::{
     compiler::Compiler,
+    scanner::Span,
     values::{ArithOp, ArithmeticError, CompareOp, Constant, ObjRef, Object, StrObj, Value},
 };
 
@@ -102,6 +103,7 @@ impl<'a> VM<'a> {
 
                 OpCode::Print => self.print(),
                 OpCode::DefGlob => self.def_global(),
+                OpCode::GetGlob => self.get_global(),
 
                 OpCode::True => self.literal(Value::Boolean(true)),
                 OpCode::False => self.literal(Value::Boolean(false)),
@@ -124,14 +126,25 @@ impl<'a> VM<'a> {
         }
     }
 
+    fn get_global(&mut self) -> ExecResult {
+        let span = self.read_str()?;
+        let var_name = &self.src[span.start..span.end];
+
+        let Some(value) = self.globals.get(var_name) else {
+            self.runtime_err(&format!("Undefine variable '{var_name}'"));
+            return Err(ExecErr::RuntimeErr);
+        };
+
+        self.stack.push(*value);
+        Ok(())
+    }
+
     fn def_global(&mut self) -> ExecResult {
-        let const_ = self.read_byte();
-        // Read constant and interprect as a string
-        if let Constant::String { start, end } = self.chunk.constants[const_ as usize] {
-            // TODO: Report underflow stack
-            self.globals
-                .set(&self.src[start..end], self.stack.pop().unwrap());
-        }
+        let Span { start, end } = self.read_str()?;
+
+        // TODO: Report underflow stack
+        let value = self.stack.pop().unwrap();
+        self.globals.set(&self.src[start..end], value);
 
         Ok(())
     }
@@ -154,9 +167,7 @@ impl<'a> VM<'a> {
     }
 
     fn constant(&mut self) -> ExecResult {
-        let const_ = self.read_byte();
-        let value = self.make_value(const_)?;
-
+        let value = self.make_value()?;
         self.stack.push(value);
 
         Ok(())
@@ -241,6 +252,7 @@ impl<'a> VM<'a> {
         };
 
         let Ok(value) = res else {
+            self.runtime_err("Invalid operands. ");
             return Err(ExecErr::RuntimeErr);
         };
 
@@ -251,7 +263,6 @@ impl<'a> VM<'a> {
 
     fn operands(&mut self) -> Result<(Value, Value), ExecErr> {
         // TODO: Stack underflow
-
         let b = self.stack.pop().unwrap();
         let a = self.stack.pop().unwrap();
 
@@ -267,10 +278,10 @@ impl<'a> VM<'a> {
         }
     }
 
-    fn make_value(&mut self, const_: u8) -> Result<Value, ExecErr> {
-        let constant = self.chunk.constants[const_ as usize].clone();
+    fn make_value(&mut self) -> Result<Value, ExecErr> {
+        let constant = self.read_const();
 
-        let value = match constant {
+        let value = match *constant {
             Constant::Number(num) => Value::Number(num),
             Constant::Boolean(b) => Value::Boolean(b),
             Constant::Nil => Value::Nil,
@@ -300,6 +311,29 @@ impl<'a> VM<'a> {
         self.strings.insert(s, str_ref);
 
         str_ref
+    }
+
+    fn runtime_err(&mut self, msg: &str) {
+        let line = self.chunk.rles.get_ln(self.ip - 1);
+        eprintln!("{msg} [line {line}] in script");
+        self.stack.clear();
+    }
+
+    fn read_str(&mut self) -> Result<Span, ExecErr> {
+        let const_ = self.read_const();
+
+        if let Constant::String { start, end } = *const_ {
+            Ok(Span { start, end })
+        } else {
+            // Invalid string constant
+            Err(ExecErr::CompileErr)
+        }
+    }
+
+    fn read_const(&mut self) -> &Constant {
+        let const_ = self.read_byte();
+
+        &self.chunk.constants[const_ as usize]
     }
 
     #[inline]

@@ -36,6 +36,7 @@ pub fn disasm_instr(offset: usize, chunk: &Chunk) -> usize {
 
         OpCode::Print => simple_instr("Print", offset),
         OpCode::DefGlob => const_instr("DefGlob", offset, chunk),
+        OpCode::GetGlob => const_instr("GetGlob", offset, chunk),
 
         OpCode::True => simple_instr("True", offset),
         OpCode::False => simple_instr("False", offset),

@@ -1,4 +1,7 @@
-use crate::{scanner::Scanner, values::Constant};
+use crate::{
+    scanner::{Scanner, Span},
+    values::Constant,
+};
 use std::{collections::HashMap, str::FromStr};
 
 use crate::{
@@ -13,6 +16,7 @@ enum PrefixRule {
     Number,
     Literal,
     String,
+    Variable,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -144,6 +148,18 @@ impl<'a> Compiler<'a> {
         })
     }
 
+    fn variable(&mut self) {
+        self.named_variable(self.parser.prev.span);
+    }
+    fn named_variable(&mut self, var_span: Span) {
+        let arg = self.make_constant(Constant::String {
+            start: var_span.start,
+            end: var_span.end,
+        });
+
+        self.emit_bytes(OpCode::GetGlob as u8, arg);
+    }
+
     fn statement(&mut self) {
         if self._match(TokenKind::Print) {
             self.print_stmt();
@@ -260,6 +276,7 @@ impl<'a> Compiler<'a> {
     fn compile_prefix(&mut self, prefix: PrefixRule) {
         match prefix {
             PrefixRule::Grouping => self.grouping(),
+            PrefixRule::Variable => self.variable(),
             PrefixRule::Number => self.number(),
             PrefixRule::Unary => self.unary(),
             PrefixRule::Literal => self.literal(),
@@ -489,6 +506,11 @@ impl Parser {
         self.rules.insert(
             TokenKind::String,
             ParseRule::default().prefix(PrefixRule::String),
+        );
+
+        self.rules.insert(
+            TokenKind::Identifier,
+            ParseRule::default().prefix(PrefixRule::Variable),
         );
 
         self.rules.insert(TokenKind::EOF, ParseRule::default());
