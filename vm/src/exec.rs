@@ -45,6 +45,10 @@ impl<T> Interner<T> {
             false
         }
     }
+
+    fn delete(&mut self, k: &str) {
+        self.table.remove(k);
+    }
 }
 
 pub struct VM<'a> {
@@ -104,6 +108,7 @@ impl<'a> VM<'a> {
                 OpCode::Print => self.print(),
                 OpCode::DefGlob => self.def_global(),
                 OpCode::GetGlob => self.get_global(),
+                OpCode::SetGlob => self.set_global(),
 
                 OpCode::True => self.literal(Value::Boolean(true)),
                 OpCode::False => self.literal(Value::Boolean(false)),
@@ -124,6 +129,21 @@ impl<'a> VM<'a> {
                 OpCode::_COUNT => return Err(ExecErr::CompileErr),
             }?
         }
+    }
+
+    fn set_global(&mut self) -> ExecResult {
+        let span = self.read_str()?;
+        let var_name = &self.src[span.start..span.end];
+
+        // TODO: Stack underflow error
+        let value = self.stack.pop().unwrap();
+        if self.globals.set(var_name, value) {
+            self.globals.delete(var_name);
+            self.runtime_err(&format!("Undefined variable '{var_name}' "));
+            return Err(ExecErr::RuntimeErr);
+        }
+
+        Ok(())
     }
 
     fn get_global(&mut self) -> ExecResult {

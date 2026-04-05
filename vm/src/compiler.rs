@@ -51,6 +51,7 @@ struct Parser {
     curr: Token,
 
     rules: HashMap<TokenKind, ParseRule>,
+    can_assign: bool,
 
     had_err: bool,
     panic_mode: bool,
@@ -62,6 +63,7 @@ impl Default for Parser {
             prev: Token::default(),
             curr: Token::default(),
             rules: HashMap::new(),
+            can_assign: false,
             had_err: false,
             panic_mode: false,
         }
@@ -157,7 +159,12 @@ impl<'a> Compiler<'a> {
             end: var_span.end,
         });
 
-        self.emit_bytes(OpCode::GetGlob as u8, arg);
+        if self.parser.can_assign && self._match(TokenKind::Equal) {
+            self.expression();
+            self.emit_bytes(OpCode::SetGlob as u8, arg);
+        } else {
+            self.emit_bytes(OpCode::GetGlob as u8, arg);
+        }
     }
 
     fn statement(&mut self) {
@@ -252,6 +259,9 @@ impl<'a> Compiler<'a> {
             return;
         };
 
+        let can_assign = prec <= Precedence::Assign;
+        self.parser.can_assign = can_assign;
+
         self.compile_prefix(prefix);
         while prec <= self.parser_rule_from(&self.parser.curr.kind).precedence {
             self.advance();
@@ -259,13 +269,17 @@ impl<'a> Compiler<'a> {
                 self.compile_infix(infix);
             };
         }
+
+        if self.parser.can_assign & self._match(TokenKind::Equal) {
+            self.error_at(self.parser.curr, "Invalid assignment target.");
+        }
     }
 
     fn make_constant(&mut self, constant: Constant) -> Byte {
         let const_idx = self.chunk.add_const(constant);
 
         if const_idx > u8::MAX as usize {
-            self.error_at(self.parser.curr, "Too many constants in a chunk");
+            self.error("Too many constants in a chunk");
 
             0
         } else {
