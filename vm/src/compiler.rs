@@ -2,7 +2,7 @@ use crate::{
     scanner::{Scanner, Span},
     values::Constant,
 };
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, str::FromStr, u8};
 
 use crate::{
     chunk::{Byte, Chunk, OpCode},
@@ -70,11 +70,64 @@ impl Default for Parser {
     }
 }
 
+struct Local {
+    name: Token,
+    depth: usize,
+    ready: bool,
+}
+
+#[derive(Default)]
+struct CompilerContext {
+    locals: Vec<Local>,
+    scope: usize,
+}
+
+impl CompilerContext {
+    const MAX_LOCALS: usize = (u8::MAX as usize) + 1;
+
+    fn add_local(&mut self, name: Token) -> Result<(), &'static str> {
+        if self.locals.len() == Self::MAX_LOCALS {
+            return Err("Too many local variables in function.");
+        }
+
+        let local = Local {
+            name,
+            depth: self.scope,
+            ready: false,
+        };
+
+        self.locals.push(local);
+
+        Ok(())
+    }
+
+    fn begin_scope(&mut self) {
+        self.scope += 1;
+    }
+
+    fn end_scope(&mut self) -> usize {
+        self.scope -= 1;
+
+        let mut pops = 0;
+        while let Some(local) = self.locals.last() {
+            if local.depth <= self.scope {
+                break;
+            }
+
+            self.locals.pop();
+            pops += 1;
+        }
+
+        pops
+    }
+}
+
 pub struct Compiler<'a> {
     parser: Parser,
     scanner: Scanner<'a>,
 
     chunk: &'a mut Chunk,
+    context: CompilerContext,
     source: &'a str,
 }
 
@@ -90,6 +143,7 @@ impl<'a> Compiler<'a> {
             scanner,
             source,
             chunk,
+            context: CompilerContext::default(),
         }
     }
 
@@ -133,6 +187,10 @@ impl<'a> Compiler<'a> {
     }
 
     fn def_global(&mut self, var: Byte) {
+        if self.context.scope > 0 {
+            return;
+        }
+
         self.emit_bytes(OpCode::DefGlob as u8, var);
     }
 
@@ -143,11 +201,44 @@ impl<'a> Compiler<'a> {
         );
 
         let name = self.parser.prev.span;
+        self.declare_var();
+        if self.context.scope > 0 {
+            return 0;
+        }
 
         self.make_constant(Constant::String {
             start: name.start,
             end: name.end,
         })
+    }
+
+    fn declare_var(&mut self) {
+        if self.context.scope == 0 {
+            return;
+        }
+
+        let name = self.parser.prev;
+        let mut had_err = None;
+
+        for local in self.context.locals.iter().rev() {
+            if local.ready && local.depth < self.context.scope {
+                break;
+            }
+
+            
+            if self.idents_equals(name, local.name) {
+                had_err = Some("Already variable with this name in this scope.");
+                break;
+            }
+        }
+
+        if let Some(err) = had_err {
+            self.error_at(name, err);
+        }
+
+        if let Err(msg) = self.context.add_local(name) {
+            self.error(msg);
+        }
     }
 
     fn variable(&mut self) {
@@ -170,11 +261,25 @@ impl<'a> Compiler<'a> {
     fn statement(&mut self) {
         if self._match(TokenKind::Print) {
             self.print_stmt();
+        } else if self._match(TokenKind::LeftBrace) {
+            self.context.begin_scope();
+            self.block_stmt();
+
+            let pops = self.context.end_scope();
+            self.emit_n_bytes(pops, OpCode::Pop as u8);
         } else {
             self.expression();
             self.consume(TokenKind::Semicolon, "Expect ';' after expression.");
             self.emit_byte(OpCode::Pop);
         }
+    }
+
+    fn block_stmt(&mut self) {
+        while !self.check(TokenKind::RightBrace) && !self.check(TokenKind::EOF) {
+            self.declaration();
+        }
+
+        self.consume(TokenKind::RightBrace, "Expect '}' after block.");
     }
 
     fn print_stmt(&mut self) {
@@ -364,6 +469,19 @@ impl<'a> Compiler<'a> {
             return true;
         }
         false
+    }
+
+    fn idents_equals(&self, a: Token, b: Token) -> bool {
+        let a_str = &self.source[a.span.start..a.span.end];
+        let b_str = &self.source[b.span.start..b.span.end];
+
+        dbg!(a_str) == dbg!(b_str)
+    }
+
+    fn emit_n_bytes(&mut self, n: usize, byte: Byte) {
+        for _ in 0..n {
+            self.emit_byte(byte);
+        }
     }
 
     fn emit_byte<B: Into<u8>>(&mut self, b: B) {
