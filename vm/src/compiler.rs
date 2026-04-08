@@ -1,7 +1,4 @@
-use crate::{
-    scanner::{Scanner, Span},
-    values::Constant,
-};
+use crate::{scanner::Scanner, values::Constant};
 use std::{collections::HashMap, str::FromStr, u8};
 
 use crate::{
@@ -183,11 +180,15 @@ impl<'a> Compiler<'a> {
             TokenKind::Semicolon,
             "Expect ';' after variable declaratiion.",
         );
-        self.def_global(var);
+        self.def_var(var);
     }
 
-    fn def_global(&mut self, var: Byte) {
+    fn def_var(&mut self, var: Byte) {
         if self.context.scope > 0 {
+            if let Some(local) = self.context.locals.last_mut() {
+                local.ready = true;
+            }
+
             return;
         }
 
@@ -225,7 +226,6 @@ impl<'a> Compiler<'a> {
                 break;
             }
 
-            
             if self.idents_equals(name, local.name) {
                 had_err = Some("Already variable with this name in this scope.");
                 break;
@@ -237,25 +237,48 @@ impl<'a> Compiler<'a> {
         }
 
         if let Err(msg) = self.context.add_local(name) {
-            self.error(msg);
+            self.error_at(name, msg);
         }
     }
 
     fn variable(&mut self) {
-        self.named_variable(self.parser.prev.span);
+        self.named_variable(self.parser.prev);
     }
-    fn named_variable(&mut self, var_span: Span) {
-        let arg = self.make_constant(Constant::String {
-            start: var_span.start,
-            end: var_span.end,
-        });
+
+    fn named_variable(&mut self, var: Token) {
+        let (arg, set_op, get_op) = if let Some(idx) = self.resolve_local(var) {
+            (idx, OpCode::SetLocal, OpCode::GetLocal)
+        } else {
+            let glob = self.make_constant(Constant::String {
+                start: var.span.start,
+                end: var.span.end,
+            });
+
+            (glob, OpCode::SetGlob, OpCode::GetGlob)
+        };
 
         if self.parser.can_assign && self._match(TokenKind::Equal) {
             self.expression();
-            self.emit_bytes(OpCode::SetGlob as u8, arg);
+            self.emit_bytes(set_op as u8, arg);
         } else {
-            self.emit_bytes(OpCode::GetGlob as u8, arg);
+            self.emit_bytes(get_op as u8, arg);
         }
+    }
+
+    fn resolve_local(&mut self, name: Token) -> Option<u8> {
+        for (idx, local) in self.context.locals.iter().rev().enumerate() {
+            if !self.idents_equals(name, local.name) {
+                continue;
+            }
+
+            if !local.ready {
+                self.error_at(name, "Can't read local variable in its own initializer.");
+            }
+
+            return Some(idx as u8);
+        }
+
+        None
     }
 
     fn statement(&mut self) {
@@ -475,7 +498,7 @@ impl<'a> Compiler<'a> {
         let a_str = &self.source[a.span.start..a.span.end];
         let b_str = &self.source[b.span.start..b.span.end];
 
-        dbg!(a_str) == dbg!(b_str)
+        a_str == b_str
     }
 
     fn emit_n_bytes(&mut self, n: usize, byte: Byte) {

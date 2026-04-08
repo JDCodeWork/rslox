@@ -108,7 +108,9 @@ impl<'a> VM<'a> {
                 OpCode::Print => self.print(),
                 OpCode::DefGlob => self.def_global(),
                 OpCode::GetGlob => self.get_global(),
+                OpCode::GetLocal => self.get_local(),
                 OpCode::SetGlob => self.set_global(),
+                OpCode::SetLocal => self.set_local(),
 
                 OpCode::True => self.literal(Value::Boolean(true)),
                 OpCode::False => self.literal(Value::Boolean(false)),
@@ -146,6 +148,15 @@ impl<'a> VM<'a> {
         Ok(())
     }
 
+    fn set_local(&mut self) -> ExecResult {
+        let slot = self.read_byte() as usize;
+        let top = self.stack.len() - 1;
+
+        self.stack[slot] = self.stack[top];
+
+        Ok(())
+    }
+
     fn get_global(&mut self) -> ExecResult {
         let span = self.read_str()?;
         let var_name = &self.src[span.start..span.end];
@@ -156,6 +167,15 @@ impl<'a> VM<'a> {
         };
 
         self.stack.push(*value);
+        Ok(())
+    }
+
+    fn get_local(&mut self) -> ExecResult {
+        let slot = self.read_byte() as usize;
+        let value = self.stack[slot];
+
+        self.stack.push(value);
+
         Ok(())
     }
 

@@ -25,7 +25,9 @@ pub enum OpCode {
     Print,
     DefGlob,
     GetGlob,
+    GetLocal,
     SetGlob,
+    SetLocal,
 
     Nil,
     True,
