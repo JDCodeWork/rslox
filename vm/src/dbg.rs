@@ -2,6 +2,11 @@ use crate::chunk::{Chunk, OpCode};
 use crate::scanner::Token;
 use crate::values::{Object, Value};
 
+enum JumpDir {
+    _Back,
+    Forth,
+}
+
 pub fn disasm_chunk(chunk: &Chunk, name: &'static str) {
     println!("== {} ==", name);
 
@@ -37,9 +42,12 @@ pub fn disasm_instr(offset: usize, chunk: &Chunk) -> usize {
         OpCode::Print => simple_instr("Print", offset),
         OpCode::DefGlob => const_instr("DefGlob", offset, chunk),
         OpCode::GetGlob => const_instr("GetGlob", offset, chunk),
-        OpCode::GetLocal => byte_isntr("GetLocal", offset, chunk),
+        OpCode::GetLocal => byte_instr("GetLocal", offset, chunk),
         OpCode::SetGlob => const_instr("SetGlob", offset, chunk),
         OpCode::SetLocal => const_instr("SetLocal", offset, chunk),
+
+        OpCode::Jump => jump_instr("Jump", JumpDir::Forth, offset, chunk),
+        OpCode::JumpIfFalse => jump_instr("JumpIfFalse", JumpDir::Forth, offset, chunk),
 
         OpCode::True => simple_instr("True", offset),
         OpCode::False => simple_instr("False", offset),
@@ -65,7 +73,21 @@ fn simple_instr(name: &'static str, offset: usize) -> usize {
     offset + 1
 }
 
-fn byte_isntr(name: &'static str, offset: usize, chunk: &Chunk) -> usize {
+fn jump_instr(name: &'static str, dir: JumpDir, offset: usize, chunk: &Chunk) -> usize {
+    let jump = u16::from_be_bytes([chunk.code[offset + 1], chunk.code[offset + 2]]);
+
+    let jumps = if let JumpDir::_Back = dir {
+        offset + 3 - 1 * jump as usize
+    } else {
+        offset + 3 + 1 * jump as usize
+    };
+
+    println!("{name:<16} {offset:>4} -> {jumps}");
+
+    offset + 3
+}
+
+fn byte_instr(name: &'static str, offset: usize, chunk: &Chunk) -> usize {
     let slot = chunk.code[offset + 1];
     println!("{name}\t{slot}");
 

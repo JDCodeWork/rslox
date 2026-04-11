@@ -282,33 +282,70 @@ impl<'a> Compiler<'a> {
     }
 
     fn statement(&mut self) {
-        if self._match(TokenKind::Print) {
-            self.print_stmt();
-        } else if self._match(TokenKind::LeftBrace) {
-            self.context.begin_scope();
-            self.block_stmt();
-
-            let pops = self.context.end_scope();
-            self.emit_n_bytes(pops, OpCode::Pop as u8);
-        } else {
-            self.expression();
-            self.consume(TokenKind::Semicolon, "Expect ';' after expression.");
-            self.emit_byte(OpCode::Pop);
+        match self.parser.curr.kind {
+            TokenKind::If => self.if_stmt(),
+            TokenKind::Print => self.print_stmt(),
+            TokenKind::LeftBrace => self.block_stmt(),
+            _ => self.expression_stmt(),
         }
     }
 
+    fn if_stmt(&mut self) {
+        self.advance(); // Consume 'if'
+
+        self.consume(TokenKind::LeftParen, "Expect '(' after 'if'.");
+        self.expression();
+        self.consume(TokenKind::RightParen, "Expect ')' after condition.");
+
+        let jump_then = self.emit_jump(OpCode::JumpIfFalse);
+
+        // Then branch
+        self.emit_byte(OpCode::Pop);
+        self.statement();
+
+        let jump_else = self.emit_jump(OpCode::Jump);
+
+        self.path_jump(jump_then);
+
+        // Else branch
+        if self._match(TokenKind::Else) {
+            self.emit_byte(OpCode::Pop);
+            self.statement();
+        }
+
+        self.path_jump(jump_else);
+    }
+
     fn block_stmt(&mut self) {
+        self.advance(); // Consume '{'
+
+        self.context.begin_scope();
+        self.block();
+
+        let pops = self.context.end_scope();
+        self.emit_n_bytes(pops, OpCode::Pop as u8);
+    }
+
+    fn print_stmt(&mut self) {
+        self.advance(); // Consume PRINT token
+
+        self.expression();
+        self.consume(TokenKind::Semicolon, "Expect ';' after expression.");
+        self.emit_byte(OpCode::Print);
+    }
+
+    fn expression_stmt(&mut self) {
+        self.expression();
+        self.consume(TokenKind::Semicolon, "Expect ';' after expression.");
+        self.emit_byte(OpCode::Pop);
+    }
+
+    fn block(&mut self) {
         while !self.check(TokenKind::RightBrace) && !self.check(TokenKind::EOF) {
             self.declaration();
         }
 
         self.consume(TokenKind::RightBrace, "Expect '}' after block.");
-    }
-
-    fn print_stmt(&mut self) {
-        self.expression();
-        self.consume(TokenKind::Semicolon, "Expect ';' after expression.");
-        self.emit_byte(OpCode::Print);
     }
 
     fn expression(&mut self) {
@@ -499,6 +536,23 @@ impl<'a> Compiler<'a> {
         let b_str = &self.source[b.span.start..b.span.end];
 
         a_str == b_str
+    }
+
+    fn path_jump(&mut self, offset: usize) {
+        let jump = self.chunk.code.len() - offset - 2;
+        if jump > u16::MAX as usize {
+            self.error("Too much code to jump over.");
+        }
+
+        self.chunk.code[offset] = (jump >> 8) as u8;
+        self.chunk.code[offset + 1] = jump as u8;
+    }
+
+    fn emit_jump(&mut self, jmp_kind: OpCode) -> usize {
+        self.emit_byte(jmp_kind);
+        self.emit_bytes(0xff, 0xff);
+
+        self.chunk.code.len() - 2
     }
 
     fn emit_n_bytes(&mut self, n: usize, byte: Byte) {

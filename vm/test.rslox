@@ -1,0 +1,9 @@
+var edad = 25;
+
+if (edad < 18) {
+  print "lo siento, aun no tienes la edad suficiente.";
+} else if (edad >= 25) {
+  print "bienvenido al sistema";
+} else {
+  print "ya falta poco, espera unos años mas";
+}

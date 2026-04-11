@@ -28,6 +28,9 @@ pub enum OpCode {
     GetLocal,
     SetGlob,
     SetLocal,
+    
+    Jump,
+    JumpIfFalse,
 
     Nil,
     True,

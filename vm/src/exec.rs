@@ -103,7 +103,7 @@ impl<'a> VM<'a> {
 
             match opcode {
                 OpCode::Cons => self.constant(),
-                OpCode::Pop => self.pop(),
+                OpCode::Pop => self.pop_stack().map(|_| ()),
 
                 OpCode::Print => self.print(),
                 OpCode::DefGlob => self.def_global(),
@@ -111,6 +111,9 @@ impl<'a> VM<'a> {
                 OpCode::GetLocal => self.get_local(),
                 OpCode::SetGlob => self.set_global(),
                 OpCode::SetLocal => self.set_local(),
+
+                OpCode::Jump => self.jump(),
+                OpCode::JumpIfFalse => self.jump_if_false(),
 
                 OpCode::True => self.literal(Value::Boolean(true)),
                 OpCode::False => self.literal(Value::Boolean(false)),
@@ -133,12 +136,28 @@ impl<'a> VM<'a> {
         }
     }
 
+    fn jump(&mut self) -> ExecResult {
+        let offset = self.read_short();
+        self.ip += offset as usize;
+
+        Ok(())
+    }
+
+    fn jump_if_false(&mut self) -> ExecResult {
+        let offset = self.read_short();
+
+        if self.last_stack()?.is_falsey() {
+            self.ip += offset as usize;
+        }
+
+        Ok(())
+    }
+
     fn set_global(&mut self) -> ExecResult {
         let span = self.read_str()?;
         let var_name = &self.src[span.start..span.end];
 
-        // TODO: Stack underflow error
-        let value = self.stack.pop().unwrap();
+        let value = self.pop_stack()?;
         if self.globals.set(var_name, value) {
             self.globals.delete(var_name);
             self.runtime_err(&format!("Undefined variable '{var_name}' "));
@@ -150,9 +169,7 @@ impl<'a> VM<'a> {
 
     fn set_local(&mut self) -> ExecResult {
         let slot = self.read_byte() as usize;
-        let top = self.stack.len() - 1;
-
-        self.stack[slot] = self.stack[top];
+        self.stack[slot] = self.last_stack()?;
 
         Ok(())
     }
@@ -182,27 +199,20 @@ impl<'a> VM<'a> {
     fn def_global(&mut self) -> ExecResult {
         let Span { start, end } = self.read_str()?;
 
-        // TODO: Report underflow stack
-        let value = self.stack.pop().unwrap();
+        let value = self.pop_stack()?;
         self.globals.set(&self.src[start..end], value);
 
         Ok(())
     }
 
     fn print(&mut self) -> ExecResult {
-        // TODO: Report underflow stack
-        let value = self.stack.pop().unwrap();
+        let value = self.pop_stack()?;
         if let Value::Object(id) = value {
             println!("{}", self.heap[id.0]);
         } else {
             println!("{}", value);
         }
 
-        Ok(())
-    }
-
-    fn pop(&mut self) -> ExecResult {
-        self.stack.pop();
         Ok(())
     }
 
@@ -302,9 +312,8 @@ impl<'a> VM<'a> {
     }
 
     fn operands(&mut self) -> Result<(Value, Value), ExecErr> {
-        // TODO: Stack underflow
-        let b = self.stack.pop().unwrap();
-        let a = self.stack.pop().unwrap();
+        let b = self.pop_stack()?;
+        let a = self.pop_stack()?;
 
         Ok((a, b))
     }
@@ -357,6 +366,31 @@ impl<'a> VM<'a> {
         let line = self.chunk.rles.get_ln(self.ip - 1);
         eprintln!("{msg} [line {line}] in script");
         self.stack.clear();
+    }
+
+    fn last_stack(&mut self) -> Result<Value, ExecErr> {
+        if let Some(value) = self.stack.last() {
+            Ok(*value)
+        } else {
+            self.runtime_err("Stack underflow");
+            Err(ExecErr::RuntimeErr)
+        }
+    }
+
+    fn pop_stack(&mut self) -> Result<Value, ExecErr> {
+        if let Some(value) = self.stack.pop() {
+            Ok(value)
+        } else {
+            self.runtime_err("Stack underflow");
+            Err(ExecErr::RuntimeErr)
+        }
+    }
+
+    fn read_short(&mut self) -> u16 {
+        let bytes = [self.chunk.code[self.ip], self.chunk.code[self.ip + 1]];
+        self.ip += 2;
+
+        u16::from_be_bytes(bytes)
     }
 
     fn read_str(&mut self) -> Result<Span, ExecErr> {
