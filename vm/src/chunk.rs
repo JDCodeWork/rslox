@@ -31,6 +31,7 @@ pub enum OpCode {
     
     Jump,
     JumpIfFalse,
+    Loop,
 
     Nil,
     True,
@@ -42,6 +43,7 @@ pub enum OpCode {
     Sub,
     Mul,
     Div,
+    Mod,
 
     // Logic Op
     Not,

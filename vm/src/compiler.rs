@@ -268,13 +268,14 @@ impl<'a> Compiler<'a> {
     }
 
     fn resolve_local(&mut self, name: Token) -> Option<u8> {
-        for (idx, local) in self.context.locals.iter().rev().enumerate() {
+        for (idx, local) in self.context.locals.iter().enumerate().rev() {
             if !self.idents_equals(name, local.name) {
                 continue;
             }
 
             if !local.ready {
                 self.error_at(name, "Can't read local variable in its own initializer.");
+                return None;
             }
 
             return Some(idx as u8);
@@ -288,8 +289,28 @@ impl<'a> Compiler<'a> {
             TokenKind::If => self.if_stmt(),
             TokenKind::Print => self.print_stmt(),
             TokenKind::LeftBrace => self.block_stmt(),
+            TokenKind::While => self.while_stmt(),
             _ => self.expression_stmt(),
         }
+    }
+
+    fn while_stmt(&mut self) {
+        self.advance(); // Consume 'while'
+
+        let while_start = self.chunk.code.len();
+
+        self.consume(TokenKind::LeftParen, "Expect '(' after 'while'.");
+        self.expression();
+        self.consume(TokenKind::RightParen, "Expect ')' after condition.");
+
+        let jump_while = self.emit_jump(OpCode::JumpIfFalse);
+        self.emit_byte(OpCode::Pop);
+
+        self.statement();
+        self.emit_loop(while_start);
+
+        self.path_jump(jump_while);
+        self.emit_byte(OpCode::Pop);
     }
 
     fn if_stmt(&mut self) {
@@ -307,10 +328,10 @@ impl<'a> Compiler<'a> {
 
         let jump_else = self.emit_jump(OpCode::Jump);
 
-        self.path_jump(jump_then);
-
         // Else branch
+        self.path_jump(jump_then);
         self.emit_byte(OpCode::Pop);
+
         if self._match(TokenKind::Else) {
             self.statement();
         }
@@ -404,11 +425,11 @@ impl<'a> Compiler<'a> {
     }
 
     fn and(&mut self) {
-        let jump_righ = self.emit_jump(OpCode::JumpIfFalse);
+        let jump_right = self.emit_jump(OpCode::JumpIfFalse);
         self.emit_byte(OpCode::Pop);
         self.parse_precedence(Precedence::And);
 
-        self.path_jump(jump_righ);
+        self.path_jump(jump_right);
     }
 
     fn binary(&mut self) {
@@ -428,6 +449,7 @@ impl<'a> Compiler<'a> {
             TokenKind::Minus => self.emit_byte(OpCode::Sub),
             TokenKind::Star => self.emit_byte(OpCode::Mul),
             TokenKind::Slash => self.emit_byte(OpCode::Div),
+            TokenKind::Percent => self.emit_byte(OpCode::Mod),
             _ => {}
         }
     }
@@ -571,6 +593,17 @@ impl<'a> Compiler<'a> {
         self.chunk.code[offset + 1] = jump as u8;
     }
 
+    fn emit_loop(&mut self, loop_start: usize) {
+        self.emit_byte(OpCode::Loop);
+        let offset = self.chunk.code.len() - loop_start + 2;
+        if offset > u16::MAX as usize {
+            self.error("Loop body too large.");
+        }
+
+        self.emit_byte((offset >> 8) as u8);
+        self.emit_byte(offset as u8);
+    }
+
     fn emit_jump(&mut self, jmp_kind: OpCode) -> usize {
         self.emit_byte(jmp_kind);
         self.emit_bytes(0xff, 0xff);
@@ -672,6 +705,12 @@ impl Parser {
         );
         self.rules.insert(
             TokenKind::Star,
+            ParseRule::default()
+                .infix(InfixRule::Binary)
+                .precedence(Precedence::Factor),
+        );
+        self.rules.insert(
+            TokenKind::Percent,
             ParseRule::default()
                 .infix(InfixRule::Binary)
                 .precedence(Precedence::Factor),

@@ -1,10 +1,16 @@
-var edad = 15;
-var hijo_directivo = false;
+var limit = 100;
 
-if (edad < 18 and !hijo_directivo) {
-  print "lo siento, aun no tienes la edad suficiente.";
-} else if (edad < 25 or hijo_directivo) {
-  print "bienvenido al sistema";
-} else {
-  print "No cumples con el rango de edad requerido";
+var i = 1;
+while ( i < limit) {
+  print i;
+
+  if (i % 3 == 0 and i % 5 == 0) {
+    print " -> FizzBuzz";
+  } else if (i % 3 == 0) {
+    print " -> Fizz";
+  } else if (i % 5 == 0) {
+    print " -> Buzz";
+  }
+
+  i = i + 1;
 }

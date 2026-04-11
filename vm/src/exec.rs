@@ -114,6 +114,7 @@ impl<'a> VM<'a> {
 
                 OpCode::Jump => self.jump(),
                 OpCode::JumpIfFalse => self.jump_if_false(),
+                OpCode::Loop => self._loop(),
 
                 OpCode::True => self.literal(Value::Boolean(true)),
                 OpCode::False => self.literal(Value::Boolean(false)),
@@ -129,6 +130,8 @@ impl<'a> VM<'a> {
                 OpCode::Sub => self.binary_op(ArithOp::Sub),
                 OpCode::Mul => self.binary_op(ArithOp::Mul),
                 OpCode::Div => self.binary_op(ArithOp::Div),
+                OpCode::Mod => self.binary_op(ArithOp::Mod),
+
                 OpCode::Return => return Ok(()),
                 // Should never happen
                 OpCode::_COUNT => return Err(ExecErr::CompileErr),
@@ -153,11 +156,18 @@ impl<'a> VM<'a> {
         Ok(())
     }
 
+    fn _loop(&mut self) -> ExecResult {
+        let offset = self.read_short();
+        self.ip -= offset as usize;
+
+        Ok(())
+    }
+
     fn set_global(&mut self) -> ExecResult {
         let span = self.read_str()?;
         let var_name = &self.src[span.start..span.end];
 
-        let value = self.pop_stack()?;
+        let value = self.last_stack()?;
         if self.globals.set(var_name, value) {
             self.globals.delete(var_name);
             self.runtime_err(&format!("Undefined variable '{var_name}' "));

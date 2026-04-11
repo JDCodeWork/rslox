@@ -12,6 +12,7 @@ pub enum ArithOp {
     Sub,
     Mul,
     Div,
+    Mod,
 }
 
 pub enum CompareOp {
@@ -99,6 +100,7 @@ impl Value {
                         Ok(Value::Number(a / b))
                     }
                 }
+                ArithOp::Mod => Ok(Value::Number(a % b)),
             }
         } else {
             Err(ArithmeticError::InvalidOperands)

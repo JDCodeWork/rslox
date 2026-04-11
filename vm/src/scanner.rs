@@ -36,6 +36,7 @@ pub enum TokenKind {
     RightParen,
     LeftBrace,
     RightBrace,
+
     Comma,
     Dot,
     Minus,
@@ -43,6 +44,7 @@ pub enum TokenKind {
     Semicolon,
     Slash,
     Star,
+    Percent,
 
     // One or two character tokens.
     Bang,
@@ -119,6 +121,7 @@ impl<'a> Scanner<'a> {
             '+' => self.make_token(TokenKind::Plus),
             '/' => self.make_token(TokenKind::Slash),
             '*' => self.make_token(TokenKind::Star),
+            '%' => self.make_token(TokenKind::Percent),
             '!' => {
                 if self.match_('=') {
                     self.make_token(TokenKind::BangEqual)

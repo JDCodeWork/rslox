@@ -3,7 +3,7 @@ use crate::scanner::Token;
 use crate::values::{Object, Value};
 
 enum JumpDir {
-    _Back,
+    Back,
     Forth,
 }
 
@@ -48,6 +48,7 @@ pub fn disasm_instr(offset: usize, chunk: &Chunk) -> usize {
 
         OpCode::Jump => jump_instr("Jump", JumpDir::Forth, offset, chunk),
         OpCode::JumpIfFalse => jump_instr("JumpIfFalse", JumpDir::Forth, offset, chunk),
+        OpCode::Loop => jump_instr("Loop", JumpDir::Back, offset, chunk),
 
         OpCode::True => simple_instr("True", offset),
         OpCode::False => simple_instr("False", offset),
@@ -62,6 +63,7 @@ pub fn disasm_instr(offset: usize, chunk: &Chunk) -> usize {
         OpCode::Sub => simple_instr("Sub", offset),
         OpCode::Mul => simple_instr("Mul", offset),
         OpCode::Div => simple_instr("Div", offset),
+        OpCode::Mod => simple_instr("Mod", offset),
         // This should never happen
         OpCode::_COUNT => panic!(),
     }
@@ -76,7 +78,7 @@ fn simple_instr(name: &'static str, offset: usize) -> usize {
 fn jump_instr(name: &'static str, dir: JumpDir, offset: usize, chunk: &Chunk) -> usize {
     let jump = u16::from_be_bytes([chunk.code[offset + 1], chunk.code[offset + 2]]);
 
-    let jumps = if let JumpDir::_Back = dir {
+    let jumps = if let JumpDir::Back = dir {
         offset + 3 - 1 * jump as usize
     } else {
         offset + 3 + 1 * jump as usize
