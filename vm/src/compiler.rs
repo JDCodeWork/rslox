@@ -290,8 +290,58 @@ impl<'a> Compiler<'a> {
             TokenKind::Print => self.print_stmt(),
             TokenKind::LeftBrace => self.block_stmt(),
             TokenKind::While => self.while_stmt(),
+            TokenKind::For => self.for_stmt(),
             _ => self.expression_stmt(),
         }
+    }
+
+    fn for_stmt(&mut self) {
+        self.advance(); // Consume 'for'
+        self.context.begin_scope();
+
+        self.consume(TokenKind::LeftParen, "Expect '(' after 'for'.");
+        // INITIALIZER
+        match self.parser.curr.kind {
+            TokenKind::Semicolon => self.advance(),
+            TokenKind::Var => {
+                self.advance();
+                self.var_decl()
+            }
+            _ => self.expression_stmt(),
+        }
+
+        // CONDITION
+        let mut for_start = self.chunk.code.len();
+        let jump_for = (!self._match(TokenKind::Semicolon)).then(|| {
+            self.expression();
+            self.consume(TokenKind::Semicolon, "Expect ';' after condition.");
+
+            let offset = self.emit_jump(OpCode::JumpIfFalse);
+            offset
+        });
+
+        if !self._match(TokenKind::RightParen) {
+            let jump_incr = self.emit_jump(OpCode::Jump);
+            let incr_start = self.chunk.code.len();
+
+            self.expression();
+            self.emit_byte(OpCode::Pop);
+            self.consume(TokenKind::RightParen, "Expect ')' after increment.");
+
+            self.emit_loop(for_start);
+            for_start = incr_start;
+            self.path_jump(jump_incr);
+        }
+
+        self.statement();
+
+        self.emit_loop(for_start);
+        if let Some(offset) = jump_for {
+            self.path_jump(offset);
+            self.emit_byte(OpCode::Pop);
+        }
+
+        self.context.end_scope();
     }
 
     fn while_stmt(&mut self) {

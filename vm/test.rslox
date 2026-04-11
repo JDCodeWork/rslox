@@ -1,7 +1,6 @@
 var limit = 100;
 
-var i = 1;
-while ( i < limit) {
+for (var i = 1; i < limit; i = i + 1) {
   print i;
 
   if (i % 3 == 0 and i % 5 == 0) {
@@ -11,6 +10,4 @@ while ( i < limit) {
   } else if (i % 5 == 0) {
     print " -> Buzz";
   }
-
-  i = i + 1;
 }
