@@ -1,4 +1,7 @@
-use crate::{scanner::Scanner, values::Constant};
+use crate::{
+    scanner::Scanner,
+    values::{ArithOp, Constant},
+};
 use std::{collections::HashMap, str::FromStr, u8};
 
 use crate::{
@@ -69,6 +72,7 @@ impl Default for Parser {
     }
 }
 
+#[derive(Debug)]
 struct Local {
     name: Token,
     depth: usize,
@@ -172,6 +176,16 @@ impl<'a> Compiler<'a> {
     fn var_decl(&mut self) {
         let var = self.parse_var();
 
+        if self.match_any(&[
+            TokenKind::PlusEqual,
+            TokenKind::MinusEqual,
+            TokenKind::StarEqual,
+            TokenKind::SlashEqual,
+        ]) {
+            self.error_at(self.parser.prev, "Invalid variable declaration.");
+            return;
+        }
+
         if self._match(TokenKind::Equal) {
             self.expression();
         } else {
@@ -249,22 +263,54 @@ impl<'a> Compiler<'a> {
 
     fn named_variable(&mut self, var: Token) {
         let (arg, set_op, get_op) = if let Some(idx) = self.resolve_local(var) {
-            (idx, OpCode::SetLocal, OpCode::GetLocal)
+            (idx, OpCode::SetLocal as u8, OpCode::GetLocal as u8)
         } else {
             let glob = self.make_constant(Constant::String {
                 start: var.span.start,
                 end: var.span.end,
             });
 
-            (glob, OpCode::SetGlob, OpCode::GetGlob)
+            (glob, OpCode::SetGlob as u8, OpCode::GetGlob as u8)
         };
 
-        if self.parser.can_assign && self._match(TokenKind::Equal) {
-            self.expression();
-            self.emit_bytes(set_op as u8, arg);
-        } else {
-            self.emit_bytes(get_op as u8, arg);
+        match (self.parser.can_assign, self.parser.curr.kind) {
+            (true, TokenKind::Equal) => {
+                self.advance();
+                self.expression();
+                self.emit_bytes(set_op, arg);
+            }
+            (true, TokenKind::PlusEqual) => self.compound_assign(ArithOp::Add, get_op, set_op, arg),
+            (true, TokenKind::MinusEqual) => {
+                self.compound_assign(ArithOp::Sub, get_op, set_op, arg)
+            }
+            (true, TokenKind::StarEqual) => self.compound_assign(ArithOp::Mul, get_op, set_op, arg),
+            (true, TokenKind::SlashEqual) => {
+                self.compound_assign(ArithOp::Div, get_op, set_op, arg)
+            }
+            (_, _) => {
+                self.emit_bytes(get_op, arg);
+            }
         }
+    }
+
+    fn compound_assign(&mut self, op: ArithOp, get_op: u8, set_op: u8, arg: u8) {
+        if let ArithOp::Mod = op {
+            #[cfg(feature = "dbg")]
+            eprintln!("Developer error: Unsoported operator");
+            return;
+        }
+
+        self.advance();
+        self.emit_bytes(get_op, arg);
+        self.expression();
+        match op {
+            ArithOp::Add => self.emit_byte(OpCode::Add),
+            ArithOp::Sub => self.emit_byte(OpCode::Sub),
+            ArithOp::Mul => self.emit_byte(OpCode::Mul),
+            ArithOp::Div => self.emit_byte(OpCode::Div),
+            _ => {}
+        }
+        self.emit_bytes(set_op, arg);
     }
 
     fn resolve_local(&mut self, name: Token) -> Option<u8> {
@@ -317,6 +363,7 @@ impl<'a> Compiler<'a> {
             self.consume(TokenKind::Semicolon, "Expect ';' after condition.");
 
             let offset = self.emit_jump(OpCode::JumpIfFalse);
+            self.emit_byte(OpCode::Pop);
             offset
         });
 
@@ -341,7 +388,8 @@ impl<'a> Compiler<'a> {
             self.emit_byte(OpCode::Pop);
         }
 
-        self.context.end_scope();
+        let pops = self.context.end_scope();
+        self.emit_n_bytes(pops, OpCode::Pop as u8);
     }
 
     fn while_stmt(&mut self) {
@@ -517,9 +565,8 @@ impl<'a> Compiler<'a> {
             return;
         };
 
-        let can_assign = prec <= Precedence::Assign;
-        self.parser.can_assign = can_assign;
-
+        let prev_can_assign = self.parser.can_assign;
+        self.parser.can_assign = prec <= Precedence::Assign;
         self.compile_prefix(prefix);
         while prec <= self.parser_rule_from(&self.parser.curr.kind).precedence {
             self.advance();
@@ -528,9 +575,19 @@ impl<'a> Compiler<'a> {
             };
         }
 
-        if self.parser.can_assign && self._match(TokenKind::Equal) {
+        if self.parser.can_assign
+            && self.match_any(&[
+                TokenKind::Equal,
+                TokenKind::PlusEqual,
+                TokenKind::MinusEqual,
+                TokenKind::StarEqual,
+                TokenKind::SlashEqual,
+            ])
+        {
             self.error_at(self.parser.curr, "Invalid assignment target.");
         }
+
+        self.parser.can_assign = prev_can_assign;
     }
 
     fn make_constant(&mut self, constant: Constant) -> Byte {
@@ -565,8 +622,8 @@ impl<'a> Compiler<'a> {
     }
 
     fn parser_rule_from(&self, op: &TokenKind) -> &ParseRule {
-        if let Some(prule) = self.parser.rules.get(op) {
-            prule
+        if let Some(rule) = self.parser.rules.get(op) {
+            rule
         } else {
             // Safety while the rules in parser are initiaized
             self.parser.rules.get(&TokenKind::EOF).unwrap()
@@ -623,6 +680,19 @@ impl<'a> Compiler<'a> {
             self.advance();
             return true;
         }
+        false
+    }
+
+    fn match_any(&mut self, expected: &[TokenKind]) -> bool {
+        for token in expected.iter() {
+            if !self.check(*token) {
+                continue;
+            }
+
+            self.advance();
+            return true;
+        }
+
         false
     }
 

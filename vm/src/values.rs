@@ -29,7 +29,7 @@ pub enum Constant {
     Nil,
 }
 
-#[derive(Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum Value {
     Number(f64),
     Boolean(bool),

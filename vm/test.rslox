@@ -1,6 +1,6 @@
-var limit = 100;
+var limit = 10000;
 
-for (var i = 1; i < limit; i = i + 1) {
+for (var i = 1; i < limit; i += 1) {
   print i;
 
   if (i % 3 == 0 and i % 5 == 0) {

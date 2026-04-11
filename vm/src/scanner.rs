@@ -56,6 +56,11 @@ pub enum TokenKind {
     Less,
     LessEqual,
 
+    PlusEqual,
+    MinusEqual,
+    StarEqual,
+    SlashEqual,
+
     // Literals.
     Identifier,
     String,
@@ -117,11 +122,35 @@ impl<'a> Scanner<'a> {
             ';' => self.make_token(TokenKind::Semicolon),
             ',' => self.make_token(TokenKind::Comma),
             '.' => self.make_token(TokenKind::Dot),
-            '-' => self.make_token(TokenKind::Minus),
-            '+' => self.make_token(TokenKind::Plus),
-            '/' => self.make_token(TokenKind::Slash),
-            '*' => self.make_token(TokenKind::Star),
             '%' => self.make_token(TokenKind::Percent),
+            '-' => {
+                if self.match_('=') {
+                    self.make_token(TokenKind::MinusEqual)
+                } else {
+                    self.make_token(TokenKind::Minus)
+                }
+            }
+            '+' => {
+                if self.match_('=') {
+                    self.make_token(TokenKind::PlusEqual)
+                } else {
+                    self.make_token(TokenKind::Plus)
+                }
+            }
+            '/' => {
+                if self.match_('=') {
+                    self.make_token(TokenKind::SlashEqual)
+                } else {
+                    self.make_token(TokenKind::Slash)
+                }
+            }
+            '*' => {
+                if self.match_('=') {
+                    self.make_token(TokenKind::StarEqual)
+                } else {
+                    self.make_token(TokenKind::Star)
+                }
+            }
             '!' => {
                 if self.match_('=') {
                     self.make_token(TokenKind::BangEqual)
