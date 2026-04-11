@@ -1,9 +1,10 @@
-var edad = 25;
+var edad = 15;
+var hijo_directivo = false;
 
-if (edad < 18) {
+if (edad < 18 and !hijo_directivo) {
   print "lo siento, aun no tienes la edad suficiente.";
-} else if (edad >= 25) {
+} else if (edad < 25 or hijo_directivo) {
   print "bienvenido al sistema";
 } else {
-  print "ya falta poco, espera unos años mas";
+  print "No cumples con el rango de edad requerido";
 }

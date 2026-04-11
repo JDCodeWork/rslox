@@ -19,6 +19,8 @@ enum PrefixRule {
 #[derive(Debug, Clone, Copy)]
 enum InfixRule {
     Binary,
+    And,
+    Or,
 }
 
 struct ParseRule {
@@ -32,8 +34,8 @@ struct ParseRule {
 enum Precedence {
     None,
     Assign,
-    _Or,
-    _And,
+    Or,
+    And,
     Equality,
     Comparison,
     Term,
@@ -308,8 +310,8 @@ impl<'a> Compiler<'a> {
         self.path_jump(jump_then);
 
         // Else branch
+        self.emit_byte(OpCode::Pop);
         if self._match(TokenKind::Else) {
-            self.emit_byte(OpCode::Pop);
             self.statement();
         }
 
@@ -390,6 +392,25 @@ impl<'a> Compiler<'a> {
         }
     }
 
+    fn or(&mut self) {
+        let jump_left = self.emit_jump(OpCode::JumpIfFalse);
+
+        let jump_right = self.emit_jump(OpCode::Jump);
+        self.path_jump(jump_left);
+        self.emit_byte(OpCode::Pop);
+        self.parse_precedence(Precedence::Or);
+
+        self.path_jump(jump_right);
+    }
+
+    fn and(&mut self) {
+        let jump_righ = self.emit_jump(OpCode::JumpIfFalse);
+        self.emit_byte(OpCode::Pop);
+        self.parse_precedence(Precedence::And);
+
+        self.path_jump(jump_righ);
+    }
+
     fn binary(&mut self) {
         let op = self.parser.prev.kind;
         let precedence = self.parser_rule_from(&op).precedence;
@@ -435,7 +456,7 @@ impl<'a> Compiler<'a> {
             };
         }
 
-        if self.parser.can_assign & self._match(TokenKind::Equal) {
+        if self.parser.can_assign && self._match(TokenKind::Equal) {
             self.error_at(self.parser.curr, "Invalid assignment target.");
         }
     }
@@ -466,6 +487,8 @@ impl<'a> Compiler<'a> {
     fn compile_infix(&mut self, infix: InfixRule) {
         match infix {
             InfixRule::Binary => self.binary(),
+            InfixRule::And => self.and(),
+            InfixRule::Or => self.or(),
         }
     }
 
@@ -722,6 +745,19 @@ impl Parser {
             ParseRule::default().prefix(PrefixRule::Variable),
         );
 
+        self.rules.insert(
+            TokenKind::And,
+            ParseRule::default()
+                .infix(InfixRule::And)
+                .precedence(Precedence::And),
+        );
+        self.rules.insert(
+            TokenKind::Or,
+            ParseRule::default()
+                .infix(InfixRule::Or)
+                .precedence(Precedence::Or),
+        );
+
         self.rules.insert(TokenKind::EOF, ParseRule::default());
     }
 }
@@ -730,9 +766,9 @@ impl Precedence {
     fn next(self) -> Self {
         match self {
             Precedence::None => Precedence::Assign,
-            Precedence::Assign => Precedence::_Or,
-            Precedence::_Or => Precedence::_And,
-            Precedence::_And => Precedence::Equality,
+            Precedence::Assign => Precedence::Or,
+            Precedence::Or => Precedence::And,
+            Precedence::And => Precedence::Equality,
             Precedence::Equality => Precedence::Comparison,
             Precedence::Comparison => Precedence::Term,
             Precedence::Term => Precedence::Factor,

@@ -103,7 +103,7 @@ impl<'a> Scanner<'a> {
             return Ok(self.number());
         }
 
-        if (*c as char).is_alphabetic() {
+        if (*c as char).is_alphabetic() || *c == b'_' {
             return Ok(self.identifier());
         }
 
@@ -183,8 +183,11 @@ impl<'a> Scanner<'a> {
     }
 
     fn identifier(&mut self) -> Token {
-        while byte_to_char_or(self.peek(), ' ').is_alphanumeric() {
+        let mut c = byte_to_char_or(self.peek(), ' ');
+        while c.is_alphanumeric() || c == '_' {
             self.advance();
+
+            c = byte_to_char_or(self.peek(), ' ');
         }
 
         let kind = self.identifier_kind();
