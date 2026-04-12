@@ -42,6 +42,7 @@ pub enum TokenKind {
     Minus,
     Plus,
     Semicolon,
+    Colon,
     Slash,
     Star,
     Percent,
@@ -84,6 +85,10 @@ pub enum TokenKind {
     Var,
     While,
 
+    Switch,
+    Case,
+    Default,
+
     EOF,
 }
 
@@ -120,6 +125,7 @@ impl<'a> Scanner<'a> {
             '{' => self.make_token(TokenKind::LeftBrace),
             '}' => self.make_token(TokenKind::RightBrace),
             ';' => self.make_token(TokenKind::Semicolon),
+            ':' => self.make_token(TokenKind::Colon),
             ',' => self.make_token(TokenKind::Comma),
             '.' => self.make_token(TokenKind::Dot),
             '%' => self.make_token(TokenKind::Percent),
@@ -229,16 +235,33 @@ impl<'a> Scanner<'a> {
     fn identifier_kind(&mut self) -> TokenKind {
         match self.src[self.start] as char {
             'a' => return self.check_keyword(1, 2, "nd", TokenKind::And),
-            'c' => return self.check_keyword(1, 4, "lass", TokenKind::Class),
+            'd' => return self.check_keyword(1, 6, "efault", TokenKind::Default),
             'e' => return self.check_keyword(1, 3, "lse", TokenKind::Else),
             'i' => return self.check_keyword(1, 1, "f", TokenKind::If),
             'n' => return self.check_keyword(1, 2, "il", TokenKind::Nil),
             'o' => return self.check_keyword(1, 1, "r", TokenKind::Or),
             'p' => return self.check_keyword(1, 4, "rint", TokenKind::Print),
             'r' => return self.check_keyword(1, 5, "eturn", TokenKind::Return),
-            's' => return self.check_keyword(1, 4, "uper", TokenKind::Super),
             'v' => return self.check_keyword(1, 2, "ar", TokenKind::Var),
             'w' => return self.check_keyword(1, 4, "hile", TokenKind::While),
+            'c' => {
+                if self.curr - self.start > 1 {
+                    match self.src[self.start + 1] as char {
+                        'l' => return self.check_keyword(2, 3, "ass", TokenKind::Class),
+                        'a' => return self.check_keyword(2, 2, "se", TokenKind::Case),
+                        _ => {}
+                    }
+                }
+            }
+            's' => {
+                if self.curr - self.start > 1 {
+                    match self.src[self.start + 1] as char {
+                        'u' => return self.check_keyword(2, 3, "per", TokenKind::Super),
+                        'w' => return self.check_keyword(2, 4, "itch", TokenKind::Switch),
+                        _ => {}
+                    }
+                }
+            }
             'f' => {
                 if self.curr - self.start > 1 {
                     match self.src[self.start + 1] as char {

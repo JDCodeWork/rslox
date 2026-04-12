@@ -104,6 +104,7 @@ impl<'a> VM<'a> {
             match opcode {
                 OpCode::Cons => self.constant(),
                 OpCode::Pop => self.pop_stack().map(|_| ()),
+                OpCode::Dup => self.duuplicate(),
 
                 OpCode::Print => self.print(),
                 OpCode::DefGlob => self.def_global(),
@@ -137,6 +138,13 @@ impl<'a> VM<'a> {
                 OpCode::_COUNT => return Err(ExecErr::CompileErr),
             }?
         }
+    }
+
+    fn duuplicate(&mut self) -> ExecResult {
+        let last_value = self.last_stack()?;
+        self.stack.push(last_value);
+
+        Ok(())
     }
 
     fn jump(&mut self) -> ExecResult {

@@ -21,6 +21,7 @@ pub enum OpCode {
     // Data Op
     Cons,
     Pop,
+    Dup,
 
     Print,
     DefGlob,
@@ -28,7 +29,7 @@ pub enum OpCode {
     GetLocal,
     SetGlob,
     SetLocal,
-    
+
     Jump,
     JumpIfFalse,
     Loop,

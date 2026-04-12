@@ -1,13 +1,10 @@
-var limit = 10000;
+var dia = "viernes";
 
-for (var i = 1; i < limit; i += 1) {
-  print i;
-
-  if (i % 3 == 0 and i % 5 == 0) {
-    print " -> FizzBuzz";
-  } else if (i % 3 == 0) {
-    print " -> Fizz";
-  } else if (i % 5 == 0) {
-    print " -> Buzz";
-  }
+switch (dia) {
+  case "lunes": print "Buenos dias mundo";
+  case "martes": print "Tengo algo de pereza";
+  case "miercoles": print "Yupii hoy se mira anime";
+  case "jueves": print "El cuerpo ya siente que es juernes";
+  case "viernes": print "Hoy full bagancia";
+  default: print "No lo se, no conosco este dia";
 }

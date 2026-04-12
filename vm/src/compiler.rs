@@ -337,8 +337,60 @@ impl<'a> Compiler<'a> {
             TokenKind::LeftBrace => self.block_stmt(),
             TokenKind::While => self.while_stmt(),
             TokenKind::For => self.for_stmt(),
+            TokenKind::Switch => self.switch_stmt(),
             _ => self.expression_stmt(),
         }
+    }
+
+    fn switch_stmt(&mut self) {
+        self.advance(); // Consume 'switch'
+
+        self.consume(TokenKind::LeftParen, "Expect '(' after 'switch'.");
+        self.expression();
+        self.consume(TokenKind::RightParen, "Expect ')' after expression.");
+
+        self.consume(TokenKind::LeftBrace, "Expect '{' after switch header.");
+        let mut jumps_switch = vec![];
+        while !self.check_any(&[TokenKind::RightBrace, TokenKind::Default, TokenKind::EOF]) {
+            let jump_switch = self.switch_case();
+            jumps_switch.push(jump_switch);
+        }
+
+        if self._match(TokenKind::Default) {
+            self.consume(TokenKind::Colon, "Expect ':' after 'default'.");
+            self.statement();
+        }
+
+        self.consume(TokenKind::RightBrace, "Expect '}' after switch body.");
+        for jump in jumps_switch.iter().cloned() {
+            self.path_jump(jump);
+        }
+        self.emit_byte(OpCode::Pop);
+    }
+
+    fn switch_case(&mut self) -> usize {
+        self.consume(
+            TokenKind::Case,
+            "Expect 'case' followed by a value or expression.",
+        );
+
+        self.emit_byte(OpCode::Dup); // Duplicate switch header expression.
+
+        self.expression();
+        self.emit_byte(OpCode::Eq);
+        let jump_case = self.emit_jump(OpCode::JumpIfFalse);
+
+        // THEN BRANCH
+        self.emit_byte(OpCode::Pop);
+        self.consume(TokenKind::Colon, "Expect ':' after case expression.");
+        self.statement();
+        let jump_switch = self.emit_jump(OpCode::Jump); // Jump to the end of the switch if the case match
+
+        // END
+        self.path_jump(jump_case);
+        self.emit_byte(OpCode::Pop);
+
+        jump_switch
     }
 
     fn for_stmt(&mut self) {
@@ -671,6 +723,10 @@ impl<'a> Compiler<'a> {
         self.error_at(self.parser.curr, error);
     }
 
+    fn check_any(&self, expected: &[TokenKind]) -> bool {
+        expected.contains(&self.parser.curr.kind)
+    }
+
     fn check(&self, expected: TokenKind) -> bool {
         self.parser.curr.kind == expected
     }
@@ -684,11 +740,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn match_any(&mut self, expected: &[TokenKind]) -> bool {
-        for token in expected.iter() {
-            if !self.check(*token) {
-                continue;
-            }
-
+        if self.check_any(expected) {
             self.advance();
             return true;
         }
